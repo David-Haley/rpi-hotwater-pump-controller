@@ -1,7 +1,8 @@
 -- This package provides data logging for the Pump controller
 -- Author    : David Haley
 -- Created   : 14/10/2017
--- Last Edit : 20/08/2022
+-- Last Edit : 11/05/2023
+-- 20230511 : Log files compacted by removal of leading spaces.
 -- 20220820 :  Events_and_Errors move to DJH.Events_and_Errors.
 -- 20220715 : Indirect calls to Logger.Start and Stop_Logger converted to
 -- renames ans -SV removed frim Controller_State entries;
@@ -29,6 +30,8 @@
 -- commit sequence;
 
 with Ada.Text_IO; use Ada.Text_IO;
+with Ada.Strings; use Ada.Strings;
+with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 with Ada.Directories; use Ada.Directories;
 with Ada.Calendar.Time_Zones; use Ada.Calendar.Time_Zones;
 with Ada.Calendar.Formatting; use Ada.Calendar.Formatting;
@@ -301,22 +304,25 @@ package body Data_Logger is
    Procedure Put_Log_Entry (Logging_File : in out File_Type;
                             Logger_Pump_Time : in out Accumulated_Times) is
 
-      Current_Run_Time : Accumulated_Times :=
+      Current_Run_Time : Accumulated_Times renames
         Controller_State.Accumulated_Pump_Run_Time;
+        Output_Buffer : String (1 .. 5);
 
    begin -- Put_Log_Entry
       Put (Logging_File, Time_String & ',');
-      Temperature_IO.Put (Logging_File,
-                          Controller_State.Tank_Temperature, 3, 1, 0);
+      Temperature_IO.Put (Output_Buffer,
+                          Controller_State.Tank_Temperature, 1, 0);
+      Put (Logging_File, Trim (Output_Buffer, Both));
       Put (Logging_File, ',');
-      Temperature_IO.Put (Logging_File,
-                          Controller_State.Panel_Temperature, 4, 1, 0);
+      Temperature_IO.Put (Output_Buffer,
+                          Controller_State.Panel_Temperature, 1, 0);
+      Put (Logging_File, Trim (Output_Buffer, Both));
       Put (Logging_File, ',');
-      Accumulated_IO.Put (Logging_File, Current_Run_Time - Logger_Pump_Time, 3);
+      Accumulated_IO.Put (Output_Buffer, Current_Run_Time - Logger_Pump_Time);
       -- Write running time of pump in seconds that has occured between log
       -- entries. If the pump has run for the whole time since the log entry,
       -- this may be 60 plus or minus a second dependent on task timing.
-      New_Line (Logging_File);
+      Put_Line (Logging_File, Trim (Output_Buffer, Both));
       Logger_Pump_Time := Current_Run_Time;
    exception
       when Event : others =>

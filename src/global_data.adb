@@ -2,7 +2,8 @@
 -- packages.
 -- Author    : David Haley
 -- Created   : 24/10/2017
--- Last Edit : 20/08/2022
+-- Last Edit : 11/05/2023
+-- 20230511 : Log files compacted by removal of leading spaces.
 -- 20220820 :  Events_and_Errors move to DJH.Events_and_Errors.
 -- 20220729 : Comfortable temteratire reached event added and reset event
 -- wording changed.
@@ -61,7 +62,7 @@ with Configuration; use Configuration;
 
 package body Global_Data is
 
-   function Controller_Version return Version_String is ("20220820");
+   function Controller_Version return Version_String is ("20230511");
 
    protected body Controller_State is
 

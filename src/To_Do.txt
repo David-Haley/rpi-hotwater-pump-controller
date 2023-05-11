@@ -1,2 +1,0 @@
-Consider if Run_Controller function is required as main program initiates
-shutdown.
