@@ -1,8 +1,10 @@
--- This package provides the client component for a locally distibuted user
--- interface.
+-- This package provides client component for a distributed user interface.
+-- It provides a display of the current status and allows commands to be sent to
+-- the controller programme.
 -- Author    : David Haley
 -- Created   : 29/10/2017
--- Last Edit : 23/07/2021
+-- Last Edit : 16/06/2023
+-- 20230916 : Descriptive comment above updated.
 -- 20210723 : Command reading made internal
 -- 20210305 : made generic
 -- 20210304 : procedure Send_Command replaces Process_Task declaration.

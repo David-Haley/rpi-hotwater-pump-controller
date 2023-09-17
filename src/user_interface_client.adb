@@ -1,9 +1,10 @@
--- This package provides client component for a locally distributed user
--- interface. It ptovides a display of the current status and allows commands to
--- be sent to the controller programme
+-- This package provides client component for a distributed user interface.
+-- It provides a display of the current status and allows commands to be sent to
+-- the controller programme.
 -- Author    : David Haley
 -- Created   : 29/10/2017
--- Last Edit : 31/05/2022
+-- Last Edit : 17/06/2023
+-- 20230917 : Descriptive comment above updated, build date updated.
 -- 20220531 : Corrected issue with timeout when geting manual boost date.
 -- 20220529 : Stop_Controller request removed removed, now shutdown through 
 -- systemd/systemctl interface.
@@ -64,9 +65,11 @@ package body User_Interface_Client is
                                              (Controller_Name), 1),
                                            Port => Server_Port);
 
-   RX_Address : Sock_Addr_Type := (Family => Family_Inet,
-                                   Addr => Any_Inet_Addr,
-                                   Port => Client_Port);
+   Client_Address : Sock_Addr_Type := (Family => Family_Inet,
+                                       Addr => Any_Inet_Addr,
+                                       Port => Any_Port);
+
+   Client_Socket : Socket_Type;
 
    Screen_Width : constant := 71;
 
@@ -75,7 +78,7 @@ package body User_Interface_Client is
 --     00000000001111111111222222222233333333334444444444555555555566666666667
 --     01234567890123456789012345678901234567890123456789012345678901234567890
       "Pump Controller version: YYYYMMDD                       Time: HH:MM:SS ",
-      "User Interface version: YYYYMMDD  Build: 20220531    +-------------+--+",
+      "User Interface version: YYYYMMDD  Build: 20230917    +-------------+--+",
       "Up Time:                                            /  Panel      /   |",
       "Temperature Difference: -TU.t C                    / Temperature /    |",
       "Average Temperature Difference: -HTU.t C          /    HTU.t C  /     |",
@@ -207,8 +210,6 @@ package body User_Interface_Client is
          Boost_Date := Entered_Date;
       end Get_Boost_Date;
 
-      TX_Socket : Socket_Type;
-
       procedure Send_Request (Request_Record : in Request_Records) is
          -- Sends requests via UDP to user interface server.
 
@@ -218,7 +219,7 @@ package body User_Interface_Client is
          Last : Stream_Element_Offset;
 
       begin -- Send_Request
-         Send_Socket (TX_Socket, TX_Buffer, Last, Controller_Address);
+         Send_Socket (Client_Socket, TX_Buffer, Last, Controller_Address);
       end Send_Request;
 
       Run_Process_Requests : Boolean := True;
@@ -228,7 +229,6 @@ package body User_Interface_Client is
 
    begin -- Process_Requests
       accept Start;
-      Create_Socket (TX_Socket, Family_Inet, Socket_Datagram); -- UDP socket
       accept RX_Ready;
       while Run_Process_Requests loop
          delay until Next_Second;
@@ -274,13 +274,11 @@ package body User_Interface_Client is
             end; -- Request_Record
          end if; -- User_Input_Available
       end loop; -- Run_Process_Commands
-      Close_Socket (TX_Socket);
       accept Finished;
    end Process_Requests;
 
    task body Update_Screen is
 
-      RX_Socket : Socket_Type;
       Saved_Commit_Time : Time := Clock;
       Saved_Pump_Run, Previous_Pump_Run : Day_Seconds := 0;
       Run_Screen_Update : Boolean := True;
@@ -480,7 +478,7 @@ package body User_Interface_Client is
          if not Supress_Timeout then
             Goto_XY (53, 16); -- Position at Command Prompt
          end if; -- not Supress_Timeout
-         Receive_Socket (RX_Socket, RX_Buffer, Last);
+         Receive_Socket (Client_Socket, RX_Buffer, Last);
          if Status.User_Interface_Version /= Interface_Version then
             raise Version_Mismatch with "Server Version: " &
               Status.User_Interface_Version & " does not match "
@@ -560,9 +558,9 @@ package body User_Interface_Client is
       end Receive_Response;
 
    begin -- Update_Screen
-      Create_Socket (RX_Socket, Family_Inet, Socket_Datagram); -- UDP socket
-      Set_Socket_Option (RX_Socket, Socket_Level, (Receive_Timeout, 10.0));
-      Bind_Socket (RX_Socket, RX_Address);
+      Create_Socket (Client_Socket, Family_Inet, Socket_Datagram); -- UDP socket
+      Set_Socket_Option (Client_Socket, Socket_Level, (Receive_Timeout, 10.0));
+      Bind_Socket (Client_Socket, Client_Address);
       Put_Screen_Template;
       Process_Requests.RX_Ready;
       while Run_Screen_Update loop
@@ -571,7 +569,7 @@ package body User_Interface_Client is
       Process_Requests.Finished;
       Clear_Screen;
       Goto_XY (X_Pos'First, Y_Pos'First);
-      Close_Socket (RX_Socket);
+      Close_Socket (Client_Socket);
       accept Finished;
    end Update_Screen;
 

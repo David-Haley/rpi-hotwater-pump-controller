@@ -3,7 +3,8 @@
 -- configuration temperature calibration parameters.
 -- Author    : David Haley
 -- Created   : 20/10/2017
--- Last Edit : 06/05/2022
+-- Last Edit : 16/09/2023
+-- 20230916 :  Sample_Temperature declaration moved to specification.
 -- 20220506 : Port to native compiler and direct interface to C Buffer size
 -- increased from 128 to 574 to give maximum sample frequency between tenth and
 -- eleventh harmonics of 48 .. 52 Hz.
@@ -31,10 +32,6 @@ package body Temperature is
    type Circular_Buffers is array (Buffer_Indices) of A_Volt_Arrays;
    subtype Sample_Sums is Natural range 0 ..
      Buffer_Size * (Natural (A_Volts'Last) + 1);
-
-   task Sample_Temperature is
-      entry Stop_Sampling;
-   end Sample_Temperature;
 
    protected type Temperature_Data_Type is
 
@@ -102,13 +99,6 @@ package body Temperature is
       Temperature_Data.Is_Progress;
    end Samplmpling_Progressing;
 
-   procedure Stop_Sampling_Temperature is
-      -- Stops sampling process prior to shutdown
-
-   begin -- Stop_Sampling_Temperature
-      Sample_Temperature.Stop_Sampling;
-   end Stop_Sampling_Temperature;
-
    task body Sample_Temperature is
 
       Take_Samples : Boolean := True;
@@ -120,9 +110,9 @@ package body Temperature is
    begin -- Sample_Temperature
       while Take_Samples loop
          select
-            accept Stop_Sampling do
+            accept Stop do
                Take_Samples := False;
-            end Stop_Sampling;
+            end Stop;
          or
             delay until Next_Time;
             Temperature_Data.Write_Buffer (AD_Read);

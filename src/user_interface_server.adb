@@ -1,8 +1,11 @@
 -- This package provides server component for the user interface.
 -- Author    : David Haley
 -- Created   : 29/10/2017
--- Last Edit : 20/08/2022
--- 20220820 :  Events_and_Errors move to DJH.Events_and_Errors.
+-- Last Edit : 17/09/2023
+-- 20230916 : Run_Controller and Stop_User_Interface removed, UI_Server task
+-- with Stop made public. No fixed Client Address, allows multiple instances of
+-- user interface on the same host.
+-- 20220820 : Events_and_Errors move to DJH.Events_and_Errors.
 -- 20220715 : _SV removed from all Controller_State entries.
 -- 20220529 : Stop_Controller request removed removed, now shutdown through 
 -- systemd/systemctl interface. User_Input added to allow an ineffective
@@ -38,26 +41,9 @@ with Boost; use Boost;
 
 package body User_Interface_Server is
 
-   Run_User_Interface : Boolean := True;
-
-   task UI_Server is
-   end UI_Server;
-
-   function Run_Controller return Boolean is (Run_User_Interface);
-   
-      -- Returns True when the user interface is running, returns false after a
-      -- Stop_User_Interface is called.
-   
-   procedure Stop_User_Interface is
-      
-      -- Allows internal shutdown of user interface
-      
-   begin -- Stop_User_Interface
-      Run_User_Interface := False;
-   end  Stop_User_Interface;
-
    task body UI_Server is
 
+      Run_User_Interface : Boolean := True;
       RX_Socket, TX_Socket : Socket_Type;
       Server_Address : Sock_Addr_Type := (Family => Family_Inet,
                                           Addr => Any_Inet_Addr,
@@ -73,8 +59,13 @@ package body User_Interface_Server is
          Boost_Time : Boost_Times;
 
       begin -- Process_Requests
-         Receive_Socket (RX_Socket, RX_Buffer, Last, Client_Address);
-         if Interface_Version = Request_Record.User_Interface_Version then
+         begin -- Rx exception block
+            Receive_Socket (RX_Socket, RX_Buffer, Last, Client_Address);
+         exception when Socket_Error =>
+            null; -- an exception is raised if there is a receive timeout
+         end; -- Rx exception block
+         if Last > 0 and then
+           Interface_Version = Request_Record.User_Interface_Version then
             declare -- scope of TX_Buffer
                Status : Status_Records (Request_Record.Request);
                TX_Buffer : Response_Buffers;
@@ -121,28 +112,36 @@ package body User_Interface_Server is
                when others =>
                   null; -- Acknowledged no additional data sent
                end case; -- Request_Record.Request
-               Client_Address.Port := Client_Port;
                Send_Socket (TX_Socket, TX_Buffer, Last, Client_Address);
             end; -- scope of TX_Buffer
-         else
+         elsif Last > 0 then
             Put_Event ("Request received from wrong version UI: " &
                          Request_Record.User_Interface_Version);
-         end if; -- Interface_Version = Request_Record.User_Interface_Version
-      exception
-         when Socket_Error => null;
-         -- Allows server loop to check Run_User_Interface regularly. 
+         end if; -- Last > 0 and then ...
       end Process_Requests;
 
    begin -- UI_Server
-      Create_Socket (RX_Socket, Family_Inet, Socket_Datagram);
-      Set_Socket_Option (RX_Socket, Socket_Level, (Receive_Timeout, 5.0));
-      Bind_Socket (RX_Socket, Server_Address);
-      Create_Socket (TX_Socket, Family_Inet, Socket_Datagram);
+      accept Start do
+         Create_Socket (RX_Socket, Family_Inet, Socket_Datagram);
+         Set_Socket_Option (RX_Socket, Socket_Level, (Receive_Timeout, 3.0));
+         -- Allows server loop to potentially accept Stop regularly.
+         Bind_Socket (RX_Socket, Server_Address);
+         Create_Socket (TX_Socket, Family_Inet, Socket_Datagram);
+      end Start;
       while Run_User_Interface loop
-         Process_Requests;
+         select
+            accept Stop do
+               Run_User_Interface := False;
+            end Stop;
+         else
+            Process_Requests;
+         end select;
       end loop; -- Run_User_Interface
       Close_Socket (RX_Socket);
       Close_Socket (TX_Socket);
+      exception
+         when Event: others =>
+            Put_Error ("UI_Server", Event); 
    end UI_Server;
 
 end User_Interface_Server;

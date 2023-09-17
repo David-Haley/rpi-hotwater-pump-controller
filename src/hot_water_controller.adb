@@ -5,6 +5,8 @@
 -- Author    : David Haley
 -- Created   : 02/11/2017
 -- Last Edit : 20/08/2022
+-- 20230917 : Exception termination rearranged to ensure termination when an
+-- exception is rased in a task, preventing its completion.
 -- 20220820 :  Events_and_Errors move to DJH.Events_and_Errors.
 -- 20220715 : -SV removed from Controller_State entries.
 -- 20220531 : Starting of boost delayed so that the clock is likely to be valid
@@ -41,6 +43,7 @@
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Real_Time; use Ada.Real_Time;
 with Ada.Calendar;
+with Ada.Command_Line; use Ada.Command_Line;
 with DJH.Date_and_Time_Strings; use DJH.Date_and_Time_Strings;
 with DJH.Events_and_Errors; use DJH.Events_and_Errors;
 with RPi_Watchdog;
@@ -76,11 +79,13 @@ procedure Hot_Water_Controller is
                     (Controller_State.Accumulated_Pump_Run_Time));
       Main_Loop.Start;
       Handlers.Install; -- Ctrl C and SIGTERM Handelers
+      Start_User_Interface;
       Main_loop.Watchdog_Delay;
       -- allow for multiple current pump cycles before enabling watchdog;
       Put_Event ("Watchdog enabled");
       Enable_Watchdog;
-      Start_Boost; -- delayed such that the clock will have the correct time
+      Start_Boost;
+      -- Last task to start delayed return to allow home automation to start.
    end Initialise;
 
    task body Main_Loop is
@@ -102,21 +107,19 @@ procedure Hot_Water_Controller is
       accept Start;
       while Run_Main_Loop loop
          select
-            when not Run_Controller or Handlers.Signal_Stop or Ctrl_C_Stop=>
+            when Handlers.Signal_Stop or Ctrl_C_Stop=>
                accept Stop do
+                  if Handlers.Signal_Stop then
+                     Put_Event ("Shutdown initiated by SYSTERM");
+                  elsif Ctrl_C_Stop then
+                     Put_Event ("Shutdown initiated by crtl c");
+                  end if; -- Handlers.Signal_Stop
                   Controller_State.Pump_Stop;
                   Disable_Watchdog;
                   Stop_Sampling_Temperature;
                   Stop_Boost;
                   Stop_Logger;
-                  Stop_User_Interface;
-                  if Handlers.Signal_Stop then
-                     Put_Event ("Shutdown by SYSTERM");
-                  elsif Ctrl_C_Stop then
-                     Put_Event ("Shutdown by crtl c");
-                  else
-                     Put_Event ("User Requested Shutdown");
-                  end if; -- Handlers.Signal_Stop
+                  UI_Server.Stop;
                   Stop_Events;
                   Run_Main_Loop := False;
                end Stop;
@@ -126,14 +129,33 @@ procedure Hot_Water_Controller is
          or
             accept Exception_Stop do
                Controller_State.Pump_Stop;
-               Stop_Boost;
-               Stop_Logger;
+               select
+                  Stop_Boost;
+               or
+                  delay 66.0;
+                  abort Boost_Task;
+               end select;
+               select
+                  Stop_Logger;
+               or
+                  delay 66.0;
+                  abort Logger;
+               end select;
+               select
+                  Stop_User_Interface;
+               or
+                  delay 3.3;
+                  abort UI_Server;
+               end select;
+               Disable_Watchdog;
+               select
+                  Stop_Sampling_Temperature;
+               or
+                  delay 1.1;
+                  abort Sample_Temperature;
+               end select;
                Stop_Events;
-               Stop_User_Interface;
-               Stop_Sampling_Temperature;
                Run_Main_Loop := False;
-               delay 10.0; -- Ensure watchdog timer expires by delaying
-               -- finalisation of the RPI_GPIO package.
             end Exception_Stop;
          or
             delay until Next_Time;
@@ -187,8 +209,16 @@ begin -- Hot_Water_Controller
    Initialise;
    Main_Loop.Stop; -- Only returns after main loop stopped
    Handlers.Remove; -- Ctrl C and SIGTERM Handelers
+   Set_Exit_Status (Success);
 exception
    when Event : others =>
       Put_Error ("HW controller unhandled exception", Event);
-      Main_Loop.Exception_Stop;
+      select
+         Main_Loop.Exception_Stop;
+      or
+         delay 150.0;
+         abort Main_Loop;
+      end select;
+      Handlers.Remove; -- Ctrl C and SIGTERM Handelers
+      Set_Exit_Status (Failure);
 end Hot_Water_Controller;

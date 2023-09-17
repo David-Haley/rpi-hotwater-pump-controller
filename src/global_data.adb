@@ -2,7 +2,10 @@
 -- packages.
 -- Author    : David Haley
 -- Created   : 24/10/2017
--- Last Edit : 11/05/2023
+-- Last Edit : 17/09/2023
+-- 20230913 : Home_Automation exception management revised, exception
+-- termination revised and user interface only uses one fixes port allowing for
+-- multiple instances on the same host.
 -- 20230511 : Log files compacted by removal of leading spaces.
 -- 20220820 :  Events_and_Errors move to DJH.Events_and_Errors.
 -- 20220729 : Comfortable temteratire reached event added and reset event
@@ -62,7 +65,7 @@ with Configuration; use Configuration;
 
 package body Global_Data is
 
-   function Controller_Version return Version_String is ("20230511");
+   function Controller_Version return Version_String is ("20230917");
 
    protected body Controller_State is
 

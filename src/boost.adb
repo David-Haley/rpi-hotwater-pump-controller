@@ -1,10 +1,12 @@
--- This package provides for periodic operation of the boost element of for the
+-- This package provides for periodic operation of the boost element for the
 -- purposes of sanitising (killing Leagionella) and for comfort.
 -- Author    : David Haley
 -- Created   : 04/04/2019
--- Last Edit : 20/08/2022
+-- Last Edit : 16/09/2023
+-- 20230916 : Boost task renamed to Boost_Task to avoid conflict with package
+-- name. Boost start delayed to allow home automation to start first.
 -- 20220820 :  Events_and_Errors move to DJH.Events_and_Errors.
--- 20220729 : Comfortable temteratire reached event added and reset event
+-- 20220729 : Comfortable temperature reached event added and reset event
 -- wording changed.
 -- 20220723 : Event added for comfort reset.
 -- 20220719 : Correction to test that calls Clear_Is_Comfortable, including
@@ -223,7 +225,7 @@ package body Boost is
       end if; -- Next_Day (This_Time, This_Time + Run_Interval)
    end Calculate_Next_Run_Time;
 
-   task body Boost is
+   task body Boost_Task is
 
       Safe_Count : constant Natural := 10;
       -- after Safe_Count consecutive sufficiently high temperature readings the
@@ -246,6 +248,8 @@ package body Boost is
          Read_Next_Boost_Time (Boost_Time);
          Controller_State.Write_Next_Boost_Time (Boost_Time);
          Previous_Boost_Time := Boost_Time;
+         delay 120.0; -- Allow time for Home automation to start
+         Put_Event ("Boost task starting");
          if Boost_Time.Mandatory_Boost_Time < Next_Boost_Time (Clock) then
             Boost_Time.Next_Boost_Time := Next_Boost_Time (Clock);
             Boost_Time.Mandatory_Boost_Time := Boost_Time.Next_Boost_Time;
@@ -368,6 +372,6 @@ package body Boost is
       when Event : others =>
          Controller_State.Set_Fault (Boost_Failure);
          Put_Error ("Boost Task", Event);
-   end Boost;
+   end Boost_Task;
 
 end Boost;

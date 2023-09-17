@@ -2,7 +2,9 @@
 -- purposes of sanitising (killing Leagionella) and for comfort.
 -- Author    : David Haley
 -- Created   : 04/04/2019
--- Last Edit : 15/07/2022
+-- Last Edit : 16/09/2023
+-- 20230916 : Boost task renamed to Boost_Task to avoid conflict with package
+-- name.
 -- 20220715 : Indirect call to Boost entries converted to renames.
 -- 20220531 : Next_Boost_Time made available
 -- 20220523 : Descrioption of package changed.
@@ -14,16 +16,16 @@ with Ada.Exceptions; use Ada.Exceptions;
 
 package Boost is
 
-   task Boost is
+   task Boost_Task is
       -- Boost task declaration
       entry Start_Boost;
       entry Stop_Boost;
-   end Boost;
+   end Boost_Task;
 
-   procedure Start_Boost renames Boost.Start_Boost;
+   procedure Start_Boost renames Boost_Task.Start_Boost;
    -- Starts Boost task running
 
-   procedure Stop_Boost renames Boost.Stop_Boost;
+   procedure Stop_Boost renames Boost_Task.Stop_Boost;
    -- Termibates Boost task
    
    function Next_Boost_Time (T : in Time) return time;

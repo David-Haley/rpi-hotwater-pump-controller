@@ -2,7 +2,9 @@
 -- interface.
 -- Author    : David Haley
 -- Created   : 29/10/2017
--- Last Edit : 29/05/2022
+-- Last Edit : 16/09/2023
+-- 20230916 : Removal of Client port allow for multiple user interface
+-- instances.
 -- 20220529 : Stop_Controller request removed removed, now shutdown through 
 -- systemd/systemctl interface. User_Input added to allow an ineffective
 -- Manual_Boost to be sent.
@@ -31,11 +33,8 @@ with Pump_Controller_Types; use Pump_Controller_Types;
 
 package Shared_User_Interface is
 
-   Interface_Version : constant Version_String := "20220529";
+   Interface_Version : constant Version_String := "20230916";
    Server_Port : Port_Type := 50001;
-   Client_Port : Port_Type := Server_Port + 1;
-   -- Having different port numbers for each direction allows for the the user
-   -- interface to run on the same machine as the server or externally.
 
    type Requests is (Clear_Fault_Table, Exit_User_Interface, Get_Status,
                      Manual_Boost, Refresh_Screen);
