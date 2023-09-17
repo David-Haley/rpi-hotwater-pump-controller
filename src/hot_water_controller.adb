@@ -119,7 +119,7 @@ procedure Hot_Water_Controller is
                   Stop_Sampling_Temperature;
                   Stop_Boost;
                   Stop_Logger;
-                  UI_Server.Stop;
+                  Stop_User_Interface;
                   Stop_Events;
                   Run_Main_Loop := False;
                end Stop;
