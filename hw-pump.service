@@ -1,0 +1,14 @@
+[Unit]
+Description=hot_water_controller software to control pump and boost element
+After=network.target
+
+[Service]
+Type=Simple
+RootDirectory=/home/david/Ada/Pump_Controller/
+ExecStart=/home/david/Ada/Pump_Controller/hot_water_controller
+TimeoutSec=480
+Restart=on-failure
+User=david
+
+[Install]
+WantedBy=multi-user.target
