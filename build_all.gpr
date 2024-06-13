@@ -5,7 +5,7 @@ project Build_All is
    for Object_Dir use "./obj";
    for Exec_Dir use "./obj";
    for Main use ("test_controller.adb", "test_configuration.adb",
-                 "hot_water_controller.adb", "pump_ui.adb");
+                 "hot_water_controller.adb", "pump_ui.adb", "hw_cost.adb");
                  
    package Naming is
       for Specification_Suffix ("C") use ".h";
@@ -13,7 +13,7 @@ project Build_All is
    end Naming;
 
    package Compiler is
-     for Default_Switches ("Ada") use ("-g");
+     for Default_Switches ("Ada") use ("-g", "-gnat2020");
      for Default_Switches ("C") use ("-g", "-pedantic");
    end Compiler;
 
