@@ -3,7 +3,9 @@
 -- the controller programme.
 -- Author    : David Haley
 -- Created   : 29/10/2017
--- Last Edit : 17/06/2023
+-- Last Edit : 01/05/2025
+
+-- 20250501 : Flow animation symplified, and made aparently faster.
 -- 20230917 : Descriptive comment above updated, build date updated.
 -- 20220531 : Corrected issue with timeout when geting manual boost date.
 -- 20220529 : Stop_Controller request removed removed, now shutdown through 
@@ -78,7 +80,7 @@ package body User_Interface_Client is
 --     00000000001111111111222222222233333333334444444444555555555566666666667
 --     01234567890123456789012345678901234567890123456789012345678901234567890
       "Pump Controller version: YYYYMMDD                       Time: HH:MM:SS ",
-      "User Interface version: YYYYMMDD  Build: 20230917    +-------------+--+",
+      "User Interface version: YYYYMMDD  Build: 20250501    +-------------+--+",
       "Up Time:                                            /  Panel      /   |",
       "Temperature Difference: -TU.t C                    / Temperature /    |",
       "Average Temperature Difference: -HTU.t C          /    HTU.t C  /     |",
@@ -284,10 +286,8 @@ package body User_Interface_Client is
       Run_Screen_Update : Boolean := True;
       Supress_Timeout : Boolean := False;
 
-      type Pump_Amnimation_States is mod 4;
-      Pump_Animation_State : Pump_Amnimation_States := 0;
-      type Flow_Amnimation_States is mod 7;
-      Flow_Animation_State : Flow_Amnimation_States := 0;
+      type Amnimation_States is mod 4;
+      Animation_State : Amnimation_States := 0;
 
       procedure Put_Screen_Template is
 
@@ -314,26 +314,23 @@ package body User_Interface_Client is
 
             subtype Flow_String is String (1 .. 4);
 
-            Animation : constant array (Pump_Amnimation_States) of
+            Animation : constant array (Amnimation_States) of
               String (1 .. 1):= ("-", "\", "|", "/");
-            Cold_Animation : constant array (Flow_Amnimation_States) of
-              Flow_String := (">>> ", " >>>", "  >>", "   >", "    ", ">   ",
-                              ">>  ");
-            Hot_Animation : constant array (Flow_Amnimation_States) of
-              Flow_String := (" <<<", "<<< ", "<<  ", "<   ", "    ", "   <",
-                              "  <<");
+            Cold_Animation : constant array (Amnimation_States) of
+              Flow_String := (">>..", ".>>.", "..>>", ">..>");
+            Hot_Animation : constant array (Amnimation_States) of
+              Flow_String := ("..<<", ".<<.", "<<..", "<..<");
             No_Flow : constant Flow_String := "    ";
 
          begin -- Animate_Pump
             if Running then
-               Put_Coloured_Text (Animation (Pump_Animation_State), Pump_X,
+               Put_Coloured_Text (Animation (Animation_State), Pump_X,
                                   Pump_Y, FG_Cyan);
-               Put_Coloured_Text (Cold_Animation (Flow_Animation_State),
+               Put_Coloured_Text (Cold_Animation (Animation_State),
                                   Cold_X, Cold_Y, FG_Blue, BG_Cyan);
-               Put_Coloured_Text (Hot_Animation (Flow_Animation_State),
+               Put_Coloured_Text (Hot_Animation (Animation_State),
                                   Hot_X, Hot_Y, FG_Yellow, BG_Red);
-               Pump_Animation_State := Pump_Animation_State + 1;
-               Flow_Animation_State := Flow_Animation_State + 1;
+               Animation_State := @ + 1;
             else
                Goto_XY (Pump_X, Pump_Y);
                Put (' ');

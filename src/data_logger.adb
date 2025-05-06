@@ -1,7 +1,10 @@
 -- This package provides data logging for the Pump controller
 -- Author    : David Haley
 -- Created   : 14/10/2017
--- Last Edit : 11/05/2023
+-- Last Edit : 06/05/2025
+
+-- 20250506 : Start_Logger removed, to avoid startup deadlock.
+-- 20250502 : Controller_State prefix removed from all Global_Data references.
 -- 20230511 : Log files compacted by removal of leading spaces.
 -- 20220820 :  Events_and_Errors move to DJH.Events_and_Errors.
 -- 20220715 : Indirect calls to Logger.Start and Stop_Logger converted to
@@ -174,7 +177,7 @@ package body Data_Logger is
          Close (Accumulation_File);
       exception
          when Event : others =>
-            Controller_State.Set_Fault (Accumulated_Time_File);
+            Set_Fault (Accumulated_Time_File);
             Put_Error ("Creating accumulated time files", Event);
             if Is_Open (Accumulation_File) then
                Close (Accumulation_File);
@@ -186,7 +189,8 @@ package body Data_Logger is
       -- attempting to create new files;
    end Read_Accumulated_Hours;
 
-   procedure Update_Accumulated_Time is
+   procedure Update_Accumulated_Time
+     (Logger_Pump_Time : in Accumulated_Times) is
       -- This procedure updated the file accumulated time stored in the filing
       -- system. It attempts to maintain two copies of the file, that is, a
       -- current file and a backup file. When a new value is to be written a
@@ -198,8 +202,7 @@ package body Data_Logger is
    begin -- Update_Accumulated_Time
       Create (Accumulation_File, Out_File,
               Accumulation_File_Name & Temporary_Extension);
-      Accumulated_IO.Put (Accumulation_File,
-                          Controller_State.Accumulated_Pump_Run_Time);
+      Accumulated_IO.Put (Accumulation_File, Logger_Pump_Time);
       Close (Accumulation_File);
       if Exists (Accumulation_File_Name & Backup_Extension) and then
         Exists (Accumulation_File_Name & Current_Extension) then
@@ -216,7 +219,7 @@ package body Data_Logger is
               Accumulation_File_Name & Current_Extension);
    exception
       when Event : others =>
-         Controller_State.Set_Fault (Accumulated_Time_File);
+         Set_Fault (Accumulated_Time_File);
          Put_Error ("Updating accumulated time", Event);
    end Update_Accumulated_Time;
 
@@ -297,56 +300,47 @@ package body Data_Logger is
       Open_Log_File (Logging_File, Next_Log_Entry);
    exception
       when Event : others =>
-         Controller_State.Set_Fault (Log_File);
+         Set_Fault (Log_File);
          Put_Error ("Start logging", Event);
    end Start_Logging;
 
    Procedure Put_Log_Entry (Logging_File : in out File_Type;
                             Logger_Pump_Time : in out Accumulated_Times) is
 
-      Current_Run_Time : Accumulated_Times renames
-        Controller_State.Accumulated_Pump_Run_Time;
         Output_Buffer : String (1 .. 5);
 
    begin -- Put_Log_Entry
       Put (Logging_File, Time_String & ',');
-      Temperature_IO.Put (Output_Buffer,
-                          Controller_State.Tank_Temperature, 1, 0);
-      Put (Logging_File, Trim (Output_Buffer, Both));
-      Put (Logging_File, ',');
-      Temperature_IO.Put (Output_Buffer,
-                          Controller_State.Panel_Temperature, 1, 0);
-      Put (Logging_File, Trim (Output_Buffer, Both));
-      Put (Logging_File, ',');
-      Accumulated_IO.Put (Output_Buffer, Current_Run_Time - Logger_Pump_Time);
+      Temperature_IO.Put (Output_Buffer, Tank_Temperature, 1, 0);
+      Put (Logging_File, Trim (Output_Buffer, Both) & ',');
+      Temperature_IO.Put (Output_Buffer, Panel_Temperature, 1, 0);
+      Put (Logging_File, Trim (Output_Buffer, Both) & ',');
+      Accumulated_IO.Put (Output_Buffer,
+                          Accumulated_Pump_Run_Time - Logger_Pump_Time);
       -- Write running time of pump in seconds that has occured between log
       -- entries. If the pump has run for the whole time since the log entry,
       -- this may be 60 plus or minus a second dependent on task timing.
       Put_Line (Logging_File, Trim (Output_Buffer, Both));
-      Logger_Pump_Time := Current_Run_Time;
+      Logger_Pump_Time := Accumulated_Pump_Run_Time;
    exception
       when Event : others =>
-         Controller_State.Set_Fault (Log_File);
+         Set_Fault (Log_File);
          Put_Error ("Log file entry", Event);
    end Put_Log_Entry;
 
    task body Logger is
    
-      Run_Logger : Boolean;
+      Run_Logger : Boolean := True;
       Next_Time, Previous_Time : Time;
       Previous_Pump_Time, Logger_Pump_Time : Accumulated_Times;
 
    begin -- Logger
-      accept Start do
-         -- Task inialisation delayed until package level initialisation is
-         -- complete.
-         Run_Logger := True;
-         Controller_State.Write_Accumulated_Time (Read_Accumulated_Hours);
-         Previous_Pump_Time := Controller_State.Accumulated_Pump_Run_Time;
-         Logger_Pump_Time := Controller_State.Accumulated_Pump_Run_Time;
-         Start_Logging (Logging_File, Next_Time);
-         Previous_Time := Next_Time - Log_Interval;
-      end; -- Start
+      Write_Accumulated_Time (Read_Accumulated_Hours);
+      Logger_Pump_Time := Accumulated_Pump_Run_Time;
+      Previous_Pump_Time := Logger_Pump_Time;
+      Start_Logging (Logging_File, Next_Time);
+      -- Next_Time is intitialiesd by Start_Logging
+      Previous_Time := Next_Time - Log_Interval;
       While Run_Logger loop
          select
             accept Stop do
@@ -371,21 +365,23 @@ package body Data_Logger is
             Put_Log_Entry (Logging_File, Logger_Pump_Time);
             if Clock >= Logging_File_Commit_Time.Get_Next_File_Commit then
                Flush (Logging_File);
-               if Controller_State.Accumulated_Pump_Run_Time >
-                 Previous_Pump_Time then
-                  Update_Accumulated_Time;
-                  Previous_Pump_Time :=
-                    Controller_State.Accumulated_Pump_Run_Time;
-               end if; -- Only update if the pump has run
+               Logger_Pump_Time := Accumulated_Pump_Run_Time;
+               -- Accumulated_Pump_Run_Time is copied to a local variable to
+               -- ensure consistency between Previous_Pump_Time and what is
+               -- saved to file;
+               if Logger_Pump_Time > Previous_Pump_Time then
+                  Update_Accumulated_Time (Logger_Pump_Time);
+                  Previous_Pump_Time := Logger_Pump_Time;
+               end if; -- Logger_Pump_Time > Previous_Pump_Time
                Logging_File_Commit_Time.Set_Next_File_Commit;
             end if; -- Clock >= File_Commit_Time
          end select;
       end loop; -- Run_Logger
       Close (Logging_File);
-      if Controller_State.Accumulated_Pump_Run_Time >
-        Previous_Pump_Time then
-         Update_Accumulated_Time;
-      end if; -- Only update if the pump has run
+      if Accumulated_Pump_Run_Time > Previous_Pump_Time then
+         Update_Accumulated_Time (Accumulated_Pump_Run_Time);
+         -- In this case the current value is written to file.
+      end if; -- Accumulated_Pump_Run_Time > Previous_Pump_Time
    end Logger;
 
 end Data_Logger;

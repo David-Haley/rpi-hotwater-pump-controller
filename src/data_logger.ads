@@ -1,7 +1,9 @@
 -- This package provides data logging for the Pump controller
 -- Author    : David Haley
 -- Created   : 21/10/2017
--- Last Edit : 15/07/2022
+-- Last Edit : 06/05/2025
+
+-- 20250506 : Start_Logger removed, to avoid startup deadlock.
 -- 20220715 : Indirect calls to Logger.Start and Stop_Loggerconverted to renames
 -- 20210220 : Event and error management removed to Events_and_Errors.
 -- Start_Logger added.
@@ -17,12 +19,8 @@ package Data_Logger is
 
    task Logger is
       -- Logger task declaration
-      entry Start;
       entry Stop;
    end Logger;
-
-   procedure Start_Logger renames Logger.Start;
-   -- Starts data logging.
 
    procedure Stop_Logger renames Logger.Stop;
    -- Stops data logging

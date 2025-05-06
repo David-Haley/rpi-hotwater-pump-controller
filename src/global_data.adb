@@ -2,7 +2,14 @@
 -- packages.
 -- Author    : David Haley
 -- Created   : 24/10/2017
--- Last Edit : 17/09/2023
+-- Last Edit : 06/05/2025
+
+-- 20250506 : Start_Logger and Start_User_Interface removed, to remove startup
+-- deadlock.
+-- 20250503 : Barriers added to ensure that values are defined before being
+-- read.
+-- 20250501 : Updated due to removal of Start_Events from DJH.Events_and_Errors,
+-- logging of configurstion file date and time added.
 -- 20230913 : Home_Automation exception management revised, exception
 -- termination revised and user interface only uses one fixes port allowing for
 -- multiple instances on the same host.
@@ -60,32 +67,129 @@
 -- 20171103 : Controller_States migrated here
 
 with Ada.Text_IO; use Ada.Text_IO;
+with RPi_GPIO; use RPi_GPIO;
 with Pump_Controller_Types; use Pump_Controller_Types;
 with Configuration; use Configuration;
 
 package body Global_Data is
 
-   function Controller_Version return Version_String is ("20230917");
+   type Difference_indices is mod Maximum_Hot_Delays'Last;
+
+   type Difference_Buffers is Array (Difference_indices) of
+     Temperature_Differences;
+
+   Pump_Relay : constant GPIO_Pins := Gen1;
+   Fault_LED : constant GPIO_Pins := Gen2;
+
+   function Controller_Version return Version_String is ("20250507");
+   
+   -- Barriers have only been provided where a value could be undefined during
+   -- startup. Barriers are not required where the variables are actually
+   -- initialised in in this package.
+
+   protected Controller_State is
+
+      entry Tank_Temperature (Result : out Temperatures);
+
+      entry Panel_Temperature (Result : out Temperatures);
+
+      function Pump_Run return Boolean;
+
+      function Pump_Run_Time return Day_Seconds;
+
+      entry Average_Difference (Result : out Temperature_Differences);
+
+      entry Accumulated_Pump_Run_Time (Result : out Accumulated_Times);
+
+      function Up_Time return Accumulated_Times;
+
+      entry Next_Boost (Result : out Boost_Times);
+      
+      function Is_Comfortable return Boolean;
+
+      function Read_Fault_Table return Fault_Tables;
+
+      procedure Write_Temperature (Tank : in Temperatures;
+                                   Panel : in Temperatures);
+
+      procedure Pump_Start;
+
+      procedure Pump_Stop;
+
+      procedure Write_Accumulated_Time (Run_Time : in Accumulated_Times);
+
+      procedure Write_Next_Boost_Time (Boost_Time : in Boost_Times);
+      
+      procedure Set_Is_Comfortable;
+      
+      procedure Clear_Is_Comfortable;
+
+      procedure Set_Fault (Fault_Type : in Fault_Types);
+
+      procedure Clear_Fault (Fault_Type : in Fault_Types);
+
+   private
+      Defined_Temperature, Defined_Accumulated_Time, Defined_Boost_Time
+        : Boolean := False; -- Initialise barriers
+      Panel_Temperature_SV, Tank_Tempetature_SV : Temperatures := 0.0;
+      Difference_Buffer : Difference_Buffers := (others => 0.0);
+      -- Contains history of Panel_Temperature - Tank_Temperature
+      Last_Write : Difference_indices := Difference_indices'First;
+      -- Recordes last element of Difference_Buffer which was updated
+      Average_Difference_SV : Temperature_Differences := 0.0;
+      Pump_Run_SV : Boolean := False;
+      Pump_Run_Time_SV : Day_Seconds := 0;
+      Accumulated_Pump_Run_Time_SV : Accumulated_Times := 0;
+      Up_Time_SV : Accumulated_Times := 0;
+      Boost_Time_SV : Boost_Times;
+      Is_Comfortable_SV : Boolean := False;
+      -- Records if Comfortable temperature has been reached since Comfort_Hour
+      -- each day.
+      Fault_Table : Fault_Tables := (others => False);
+      -- Initialised to no fault
+   end Controller_State;
 
    protected body Controller_State is
 
-      function Tank_Temperature return Temperatures is (Tank_Tempetature_SV);
+      entry Tank_Temperature (Result : out Temperatures)
+        when Defined_Temperature is
+        
+      begin -- Tank_Temperature
+         Result := Tank_Tempetature_SV;
+      end Tank_Temperature;
 
-      function Panel_Temperature return Temperatures is (Panel_Temperature_SV);
+      entry Panel_Temperature (Result : out Temperatures)
+        when Defined_Temperature is
+      
+      begin -- Panel_Temperature
+         Result := Panel_Temperature_SV;
+      end Panel_Temperature;
 
       function Pump_Run return Boolean is (Pump_Run_SV);
 
       function Pump_Run_Time return Day_Seconds is (Pump_Run_Time_SV);
 
-      function Accumulated_Pump_Run_Time return Accumulated_Times is
-        (Accumulated_Pump_Run_Time_SV);
+      entry Accumulated_Pump_Run_Time (result : out Accumulated_Times)
+        when Defined_Accumulated_Time is
+        
+      begin -- Accumulated_Pump_Run_Time
+         Result := Accumulated_Pump_Run_Time_SV;
+      end Accumulated_Pump_Run_Time;
 
-      function Average_Difference return Temperature_Differences is
-        (Average_Difference_SV);
+      entry Average_Difference (Result : out Temperature_Differences)
+        when Defined_Temperature is
+        
+      begin -- Average_Difference
+         Result := Average_Difference_SV;
+      end Average_Difference;
 
       function Up_Time return Accumulated_Times is (Up_Time_SV);
 
-      function Next_Boost return Boost_Times is (Boost_Time_SV);
+      entry Next_Boost (Result : out Boost_Times) when Defined_Boost_Time is
+        
+      begin -- Next_Boost
+         Result := Boost_Time_SV;
+      end Next_Boost;
       
       function Is_Comfortable return Boolean is (Is_Comfortable_SV);
 
@@ -112,13 +216,14 @@ package body Global_Data is
                       Controller_Reals (Maximum_Hot_Delay));
             end loop; -- I in Difference_indices range 0 ...
          end if; -- Maximum_Hot_Delay > 0
-         Up_Time_SV := Up_Time_SV + 1;
+         Up_Time_SV := @ + 1;
          if Pump_Run_SV then
-            Pump_Run_Time_SV := Pump_Run_Time_SV + 1;
-            Accumulated_Pump_Run_Time_SV := Accumulated_Pump_Run_Time_SV + 1;
+            Pump_Run_Time_SV := @ + 1;
+            Accumulated_Pump_Run_Time_SV := @ + 1;
          else
             Pump_Run_Time_SV := 0;
          end if; -- Pump_Run_SV
+         Defined_Temperature := True;
       end Write_Temperature;
 
       procedure Pump_Start is
@@ -139,12 +244,14 @@ package body Global_Data is
 
       begin -- Write_Accumulated_Time
          Accumulated_Pump_Run_Time_SV := Run_Time;
+         Defined_Accumulated_Time := True;
       end Write_Accumulated_Time;
 
       procedure Write_Next_Boost_Time (Boost_Time : in Boost_Times) is
 
       begin -- Write_Next_Boost_Time
          Boost_Time_SV := Boost_Time;
+         Defined_Boost_Time := True;
       end Write_Next_Boost_Time;
       
       procedure Set_Is_Comfortable is
@@ -173,7 +280,7 @@ package body Global_Data is
       begin -- Clear_Fault
          Fault_Table (Fault_Type) := False;
          for Fault_index in Fault_Types loop
-            Is_Fault := Is_Fault or Fault_Table (Fault_Index);
+            Is_Fault := @ or Fault_Table (Fault_Index);
          end loop; -- Fault_index
          if not Is_Fault then
             Write_Pin (Pin_Low, Fault_LED);
@@ -181,6 +288,120 @@ package body Global_Data is
       end Clear_Fault;
 
    end Controller_State;
+   
+   -- Externally visible subprograms related to Controller state are below.
+
+   function Tank_Temperature return Temperatures is
+   
+    Result : Temperatures;
+   
+   begin -- Tank_Temperature
+      Controller_State.Tank_Temperature (Result);
+      return Result;
+   end Tank_Temperature;
+
+   function Panel_Temperature return Temperatures is
+   
+    Result : Temperatures;
+   
+   begin -- Panel_Temperature
+      Controller_State.Panel_Temperature (Result);
+      return Result;
+   end Panel_Temperature;
+
+   function Pump_Run return Boolean is (Controller_State.Pump_Run);
+
+   function Pump_Run_Time return Day_Seconds is
+     (Controller_State.Pump_Run_Time);
+
+   function Average_Difference return Temperature_Differences is
+   
+    Result : Temperature_Differences;
+   
+   begin -- Average_Difference
+      Controller_State.Average_Difference (Result);
+      return Result;
+   end Average_Difference;
+
+   function Accumulated_Pump_Run_Time return Accumulated_Times is
+   
+      Result : Accumulated_Times;
+      
+   begin -- Accumulated_Pump_Run_Time
+      Controller_State.Accumulated_Pump_Run_Time (Result);
+      return Result;
+   end Accumulated_Pump_Run_Time;
+
+   function Up_Time return Accumulated_Times is (Controller_State.Up_Time);
+
+   function Next_Boost return Boost_Times is
+   
+    Result : Boost_Times;
+   
+   begin -- Next_Boost
+      Controller_State.Next_Boost (Result);
+      return Result;
+   end Next_Boost;
+
+   function Is_Comfortable return Boolean is (Controller_State.Is_Comfortable);
+
+   function Read_Fault_Table return Fault_Tables is
+     (Controller_State.Read_Fault_Table);
+
+   procedure Write_Temperature (Tank : in Temperatures;
+                                Panel : in Temperatures) is
+                                
+   begin -- Write_Temperature
+      Controller_State.Write_Temperature (Tank, Panel);
+   end Write_Temperature;
+
+   procedure Pump_Start is
+   
+   begin -- Pump_Start
+      Controller_State.Pump_Start;
+   end Pump_Start;
+
+   procedure Pump_Stop is
+   
+   begin -- Pump_Stop
+      Controller_State.Pump_Stop;
+   end Pump_Stop;
+
+   procedure Write_Accumulated_Time (Run_Time : in Accumulated_Times) is
+   
+   begin -- Write_Accumulated_Time
+      Controller_State.Write_Accumulated_Time (Run_Time);
+   end Write_Accumulated_Time;
+
+   procedure Write_Next_Boost_Time (Boost_Time : in Boost_Times) is
+   
+   begin -- Write_Next_Boost_Time
+      Controller_State.Write_Next_Boost_Time (Boost_Time);
+   end Write_Next_Boost_Time;
+
+   procedure Set_Is_Comfortable is
+   
+   begin -- Set_Is_Comfortable
+      Controller_State.Set_Is_Comfortable;
+   end Set_Is_Comfortable;
+
+   procedure Clear_Is_Comfortable is
+   
+   begin -- Clear_Is_Comfortable
+      Controller_State.Clear_Is_Comfortable;
+   end Clear_Is_Comfortable;
+
+   procedure Set_Fault (Fault_Type : in Fault_Types) is
+   
+   begin -- Set_Fault
+      Controller_State.Set_Fault (Fault_Type);
+   end Set_Fault;
+
+   procedure Clear_Fault (Fault_Type : in Fault_Types) is
+   
+   begin -- Clear_Fault
+      Controller_State.Clear_Fault (Fault_Type);
+   end Clear_Fault;
 
 begin -- Global_Data
    Bind_Pin (Pump_Relay, Out_Pin);

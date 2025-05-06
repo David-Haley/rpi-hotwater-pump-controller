@@ -1,7 +1,11 @@
 -- This package provides server component for the user interface.
 -- Author    : David Haley
 -- Created   : 29/10/2017
--- Last Edit : 17/09/2023
+-- Last Edit : 07/05/2025
+
+-- 20250507 : Start_User_Interface remoced to reduce potential for startup
+-- deadlock.
+-- 20250503 : Controller_State prefix removed from all Global_Data references.
 -- 20230916 : Run_Controller and Stop_User_Interface removed, UI_Server task
 -- with Stop made public. No fixed Client Address, allows multiple instances of
 -- user interface on the same host.
@@ -76,29 +80,26 @@ package body User_Interface_Server is
                when Get_Status =>
                   Status.Controller_Version := Controller_Version;
                   Status.Controller_Time := Clock;
-                  Status.Tank_Temperature := Controller_State.Tank_Temperature;
-                  Status.Panel_Temperature := Controller_State.
-                    Panel_Temperature;
-                  Status.Pump_Run := Controller_State.Pump_Run;
-                  Status.Is_Comfortable := Controller_State.Is_Comfortable;
-                  Status.Average_Difference :=
-                    Controller_State.Average_Difference;
-                  Status.Pump_Run_Time := Controller_State.Pump_Run_Time;
-                  Status.Accumulated_Pump_Run_Time := Controller_State.
-                    Accumulated_Pump_Run_Time;
-                  Status.Controller_Up_Time := Controller_State.Up_Time;
+                  Status.Tank_Temperature := Tank_Temperature;
+                  Status.Panel_Temperature := Panel_Temperature;
+                  Status.Pump_Run := Pump_Run;
+                  Status.Is_Comfortable := Is_Comfortable;
+                  Status.Average_Difference := Average_Difference;
+                  Status.Pump_Run_Time := Pump_Run_Time;
+                  Status.Accumulated_Pump_Run_Time := Accumulated_Pump_Run_Time;
+                  Status.Controller_Up_Time := Up_Time;
                   Status.Next_File_Commit_Time := Read_File_Commit_Time;
-                  Status.Next_Boost_Time := Controller_State.Next_Boost;
-                  Status.Fault_Table := Controller_State.Read_Fault_Table;
+                  Status.Next_Boost_Time := Next_Boost;
+                  Status.Fault_Table := Read_Fault_Table;
                when Clear_Fault_Table =>
                   Put_Event ("Fault Table Cleared");
                   for Fault_Index in Fault_Types loop
-                     Controller_State.Clear_Fault (Fault_Index);
+                     Clear_Fault (Fault_Index);
                   end loop; --Fault_Index in Fault_Types
                when Manual_Boost =>
                   Status.User_Input := Request_Record.User_Input;
                   if Request_Record.User_Input then
-                     Boost_Time := Controller_State.Next_Boost;
+                     Boost_Time := Next_Boost;
                      Request_Record.Next_Boost_Time.Next_Boost_Time :=
                        Next_Boost_Time (Request_Record.Next_Boost_Time.
                        Next_Boost_Time);
@@ -106,7 +107,7 @@ package body User_Interface_Server is
                        Boost_Time.Mandatory_Boost_Time then
                         Boost_Time.Next_Boost_Time :=
                           Request_Record.Next_Boost_Time.Next_Boost_Time;
-                        Controller_State.Write_Next_Boost_Time (Boost_Time);
+                        Write_Next_Boost_Time (Boost_Time);
                      end if; -- Request_Record.Next_Boost_Time.Next_Boost_Time 
                   end if; -- Request_Record.User_Input
                when others =>
@@ -121,13 +122,11 @@ package body User_Interface_Server is
       end Process_Requests;
 
    begin -- UI_Server
-      accept Start do
-         Create_Socket (RX_Socket, Family_Inet, Socket_Datagram);
-         Set_Socket_Option (RX_Socket, Socket_Level, (Receive_Timeout, 3.0));
-         -- Allows server loop to potentially accept Stop regularly.
-         Bind_Socket (RX_Socket, Server_Address);
-         Create_Socket (TX_Socket, Family_Inet, Socket_Datagram);
-      end Start;
+      Create_Socket (RX_Socket, Family_Inet, Socket_Datagram);
+      Set_Socket_Option (RX_Socket, Socket_Level, (Receive_Timeout, 3.0));
+      -- Allows server loop to potentially accept Stop regularly.
+      Bind_Socket (RX_Socket, Server_Address);
+      Create_Socket (TX_Socket, Family_Inet, Socket_Datagram);
       while Run_User_Interface loop
          select
             accept Stop do

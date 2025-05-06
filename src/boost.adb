@@ -2,7 +2,9 @@
 -- purposes of sanitising (killing Leagionella) and for comfort.
 -- Author    : David Haley
 -- Created   : 04/04/2019
--- Last Edit : 16/09/2023
+-- Last Edit : 02/05/2025
+
+-- 20250502 : Controller_State prefix removed from all Global_Data references.
 -- 20230916 : Boost task renamed to Boost_Task to avoid conflict with package
 -- name. Boost start delayed to allow home automation to start first.
 -- 20220820 :  Events_and_Errors move to DJH.Events_and_Errors.
@@ -145,7 +147,7 @@ package body Boost is
             Close (Boost_File);
          exception
             when Event : others =>
-               Controller_State.Set_Fault (Boost_Failure);
+               Set_Fault (Boost_Failure);
                Put_Error ("Creating next boost", Event);
                if Is_Open (Boost_File) then
                   Close (Boost_File);
@@ -166,7 +168,7 @@ package body Boost is
       Boost_Time : Boost_Times;
 
    begin -- Update_Next_Boost_Time
-      Boost_Time := Controller_State.Next_Boost;
+      Boost_Time := Next_Boost;
       Create (Boost_File, Out_File,
               Next_Boost_File_Name & Temporary_Extension);
       Put_Line (Boost_File, Image (Boost_Time.Next_Boost_Time));
@@ -187,7 +189,7 @@ package body Boost is
               Next_Boost_File_Name & Current_Extension);
    exception
       when Event : others =>
-         Controller_State.Set_Fault (Boost_Failure);
+         Set_Fault (Boost_Failure);
          Put_Error ("Update next boost",  Event);
    end Update_Next_Boost_Time;
 
@@ -246,14 +248,14 @@ package body Boost is
       accept Start_Boost do
          Run_Boost := True;
          Read_Next_Boost_Time (Boost_Time);
-         Controller_State.Write_Next_Boost_Time (Boost_Time);
+         Write_Next_Boost_Time (Boost_Time);
          Previous_Boost_Time := Boost_Time;
          delay 120.0; -- Allow time for Home automation to start
          Put_Event ("Boost task starting");
          if Boost_Time.Mandatory_Boost_Time < Next_Boost_Time (Clock) then
             Boost_Time.Next_Boost_Time := Next_Boost_Time (Clock);
             Boost_Time.Mandatory_Boost_Time := Boost_Time.Next_Boost_Time;
-            Controller_State.Write_Next_Boost_Time (Boost_Time);
+            Write_Next_Boost_Time (Boost_Time);
             Put_Event ("Boost time corrected, was in past");
          end if; -- Boost_Time.Mandatory_Boost_Time < Next_Boost_Time (Clock)
       end; -- Start_Boost
@@ -272,26 +274,26 @@ package body Boost is
                Next_Time := Next_Time + Run_Interval;
             end if; -- Clock - Next_Time > 2.0 * Run_interval
             Time_Zone := UTC_Time_Offset;
-            Boost_Time := Controller_State.Next_Boost;
+            Boost_Time := Next_Boost;
             -- Read state variable, may be changed by user interface
-            if Controller_State.Tank_Temperature >= Comfort_Temperature then
+            if Tank_Temperature >= Comfort_Temperature then
                Over_Comfort_Count := Over_Comfort_Count + 1;
-               if Controller_State.Tank_Temperature >= Sanitise_Temperature then
+               if Tank_Temperature >= Sanitise_Temperature then
                   Over_Safe_Count := Over_Safe_Count + 1;
                else
                   Over_Safe_Count := 0;
-               end if; -- Controller_State.Tank_Temperature >= ...
+               end if; -- Tank_Temperature >= ...
             else
                Over_Comfort_Count := 0;
                Over_Safe_Count := 0;
-            end if; -- Controller_State.Tank_Temperature ...
+            end if; -- Tank_Temperature ...
             if Over_Comfort_Count >= Safe_Count then
-               if not Controller_State.Is_Comfortable then
+               if not Is_Comfortable then
                   if not Boost_Is_On then
                      Put_Event ("Comfort temperature reached");
                   end if; -- not Boost_Is_On
-                  Controller_State.Set_Is_Comfortable;
-               end if; -- not Controller_State.Is_Comfortable
+                  Set_Is_Comfortable;
+               end if; -- not Is_Comfortable
                if Boost_is_On and not Is_Sanitise then
                   Boost_is_On := not Request_Boost_Off;
                   Put_Event ("Request Boost off (comfort temperature reached)");
@@ -303,7 +305,7 @@ package body Boost is
                Boost_Time.Next_Boost_Time :=
                  Next_Boost_Time (Clock) + Day_Count (Sanitise_Day);
                Boost_Time.Mandatory_Boost_Time := Boost_Time.Next_Boost_Time;
-               Controller_State.Write_Next_Boost_Time (Boost_Time);
+               Write_Next_Boost_Time (Boost_Time);
                -- This may occur many times but because effectively only the day
                -- can be incremented the stored value will typically only change
                -- once in a day
@@ -313,7 +315,7 @@ package body Boost is
                   Put_Event ("Request Boost off (safe temperature reached)");
                end if; -- Boost_is_On
             end if; -- Over_Safe_Count >= Safe_Count
-            if Controller_State.Next_Boost /= Previous_Boost_Time then
+            if Next_Boost /= Previous_Boost_Time then
                -- This should happen at most once per day or if a manual boost
                -- is requestes so it will not wear out the SD card
                Update_Next_Boost_Time; -- updates file
@@ -327,8 +329,8 @@ package body Boost is
                                Image (Boost_Time.Next_Boost_Time, False,
                                UTC_Time_Offset));
                end if; -- Boost_Time.Next_Boost_Time = ...
-               Previous_Boost_Time := Controller_State.Next_Boost;
-            end if; -- Controller_State.Next_Boost /= Previous_Boost_Time
+               Previous_Boost_Time := Next_Boost;
+            end if; -- Next_Boost /= Previous_Boost_Time
             if Hour (Boost_Time.Next_Boost_Time) = Hour (Clock) and
               Boost_Time.Next_Boost_Time <= Clock and not Boost_is_On then
                -- Initiate sanitie boost, terminated at Sanitise_Temperature
@@ -342,7 +344,7 @@ package body Boost is
                   Put_Event ("Manual Request Boost On");
                end if; -- Boost_Time.Next_Boost_Time = ...
             elsif Hour (Boost_Time.Next_Boost_Time) = Hour (Clock) and
-              not Controller_State.Is_Comfortable and not Boost_is_On then
+              not Is_Comfortable and not Boost_is_On then
                -- Initiate comfort, terminates at Comfort_Temperature
                Boost_is_On := Request_Boost_On;
                Remaining_Minutes := Boost_Limit;
@@ -357,20 +359,20 @@ package body Boost is
                   raise Boost_Failed with "Boost time expired";
                end if; -- Remaining_Minutes > 0
             end if; --  Hour (Boost_Tine.Next_Boost_Time) = Hour (Clock) ...
-            if Controller_State.Is_Comfortable and Previous_Hour < Comfort_Hour
+            if Is_Comfortable and Previous_Hour < Comfort_Hour
               and Comfort_Hour <= Hour (Next_Time, Time_Zone) then
                -- Check that Comfort_Temperature is reached at least once per
                -- day. The test should become true even if there has been a
                -- significant jump forward in time.
-               Controller_State.Clear_Is_Comfortable;
+               Clear_Is_Comfortable;
                Put_Event ("Reset to cold");
-            end if; -- Controller_State.Is_Comfortable and Previous_Hour < ...
+            end if; -- Is_Comfortable and Previous_Hour < ...
             Previous_Hour := Hour (Next_Time, Time_Zone);
          end select;
       end loop; -- Run_Boost
    exception
       when Event : others =>
-         Controller_State.Set_Fault (Boost_Failure);
+         Set_Fault (Boost_Failure);
          Put_Error ("Boost Task", Event);
    end Boost_Task;
 

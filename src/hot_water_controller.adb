@@ -4,7 +4,13 @@
 -- System control is provided by a model 3B Raspberry Pi.
 -- Author    : David Haley
 -- Created   : 02/11/2017
--- Last Edit : 20/08/2022
+-- Last Edit : 07/05/2025
+
+-- 20250507 : Explicit startup calls for data logger and user interface removed,
+-- To reduce potential for startup deadlock.
+-- 20250502 : Controller_State prefix removed from all Global_Data references.
+-- 20250501 : Updated due to removal of Start_Events from DJH.Events_and_Errors,
+-- Initialisation start up order revised.
 -- 20230917 : Exception termination rearranged to ensure termination when an
 -- exception is rased in a task, preventing its completion.
 -- 20220820 :  Events_and_Errors move to DJH.Events_and_Errors.
@@ -26,7 +32,7 @@
 -- 20190406 : Automatic boost feature added
 -- 20190307 : Logging file redirection removed to data logger
 -- 20190306 : Cold_Delay_SV processed to reduce the number of pump starts when
--- small mounts of cold water are added to the tank, particularly late in the
+-- small amounts of cold water are added to the tank, particularly late in the
 -- day or at night.
 -- 20190226 : log file text changed, entries start with date and time, pump
 -- accumulated time at startup recorded in event file
@@ -71,15 +77,11 @@ procedure Hot_Water_Controller is
    procedure Initialise is
 
    begin -- Initialise
-      Start_Events;
-      Start_Logger;
       Put_Event ( "HWS Pump Controller version " & Controller_Version &
                     " started, accumulated pump run seconds:" &
-                    Accumulated_Times'Image
-                    (Controller_State.Accumulated_Pump_Run_Time));
-      Main_Loop.Start;
+                    Accumulated_Pump_Run_Time'Img);
       Handlers.Install; -- Ctrl C and SIGTERM Handelers
-      Start_User_Interface;
+      Main_Loop.Start;
       Main_loop.Watchdog_Delay;
       -- allow for multiple current pump cycles before enabling watchdog;
       Put_Event ("Watchdog enabled");
@@ -114,7 +116,7 @@ procedure Hot_Water_Controller is
                   elsif Ctrl_C_Stop then
                      Put_Event ("Shutdown initiated by crtl c");
                   end if; -- Handlers.Signal_Stop
-                  Controller_State.Pump_Stop;
+                  Pump_Stop;
                   Disable_Watchdog;
                   Stop_Sampling_Temperature;
                   Stop_Boost;
@@ -128,7 +130,7 @@ procedure Hot_Water_Controller is
                accept Watchdog_Delay;
          or
             accept Exception_Stop do
-               Controller_State.Pump_Stop;
+               Pump_Stop;
                select
                   Stop_Boost;
                or
@@ -175,7 +177,7 @@ procedure Hot_Water_Controller is
             Kick_Watchdog_High;
             Reset_Progress;
             Average_Temperature (Tank, Panel);
-            Controller_State.Write_Temperature (Tank, Panel);
+            Write_Temperature (Tank, Panel);
             Samplmpling_Progressing;
             Kick_Watchdog_Low;
             -- At this point in the execution cycle slightly more half the cycle
@@ -183,16 +185,15 @@ procedure Hot_Water_Controller is
             -- measurement process.
             -- Start of pump control logic
             If Panel > Tank + Start_Difference and
-              Tank < Maximum_Tank_Temperature and
-              Controller_State.Average_Difference >= 0.0 then
-               Controller_State.Pump_Start;
+              Tank < Maximum_Tank_Temperature and Average_Difference >= 0.0 then
+               Pump_Start;
             elsif (Panel < Tank + Stop_Difference and
-                     Controller_State.Pump_Run_Time >= Minimum_Pump_Run_Time)
+                     Pump_Run_Time >= Minimum_Pump_Run_Time)
               or Tank >= Maximum_Tank_Temperature then
-               Controller_State.Pump_Stop;
+               Pump_Stop;
             end if; -- End of pump control logic
             if Tank > Alarm_Temperature then
-               Controller_State.Set_Fault (Tank_Temperature);
+               Set_Fault (Tank_Temperature);
             end if; -- Tank > Alarm_Temperature
             if Main_Loop_Counter < Watchdog_Enable_Count then
                -- The above test is more or less redundant because Natural'Last

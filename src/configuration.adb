@@ -3,7 +3,10 @@
 -- parameters that have been read in.
 -- Author    : David Haley
 -- Created   : 14/10/2017
--- Last Edit : 15/07/2022
+-- Last Edit : 01/05/2025
+
+-- 20250501 : Barrier added to prevent values being read before they are
+-- defined, by being read from the configuration file.
 -- 20220715 : Sanities_Hour renamed to Boost_Hour, renames replaces extra layer
 -- of function and procedure call.
 -- 20220714 : Comfort_Hour_P and related functions added.
@@ -16,53 +19,162 @@
 -- 20190306 : Maximum_Hot_Delay added as a configuration item
 
 with Ada.Text_IO; use Ada.Text_IO;
-with Ada.Strings.Maps; use Ada.Strings.Maps;
-with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
+with Ada.Directories; use Ada.Directories;
+with Ada.Calendar.Formatting; use Ada.Calendar.Formatting;
 with Ada.Exceptions; use Ada.Exceptions;
+with DJH.Events_and_Errors; use DJH.Events_and_Errors;
 with DJH.Parse_CSV;
 
 package body Configuration is
 
    Configuration_File_Name : constant string := "Configuration.csv";
    
+   protected User_Configuration is
+
+      entry Start_Difference (Result : out Start_Differences);
+
+      entry Stop_Difference (Result : out Stop_Differences);
+
+      entry Maximum_Tank_Temperature (Result : out Maximum_Tank_Temperatures);
+
+      entry Alarm_Temperature (Result : out Alarm_Temperatures);
+
+      entry Minimum_Pump_Run_Time (Result : out Minimun_Pump_Run_Times);
+
+      entry Maximum_Hot_Delay (Result : out Maximum_Hot_Delays);
+
+      entry Tank_Slope (Result : out Controller_Reals);
+
+      entry Tank_Offset (Result : out Controller_Reals);
+
+      entry Panel_Slope (Result : out Controller_Reals);
+
+      entry Panel_Offset (Result : out Controller_Reals);
+
+      entry Sanitise_Temperature (Result : out Sanitise_Temperatures);
+
+      entry Sanitise_Day (Result : out Sanitise_Days);
+
+      entry Boost_Hour (Result : out Boost_Hours);
+      
+      entry Comfort_Temperature (Result : out Comfort_Temperatures);
+      
+      entry Comfort_Hour (Result : out Comfort_Hours);
+      
+      procedure Read_Configuration;
+   
+   private
+      Defined : Boolean := False;
+      Start_Difference_P : Start_Differences;
+      Stop_Difference_P : Stop_Differences;
+      Maximum_Tank_Temperature_P : Maximum_Tank_Temperatures;
+      Alarm_Temperature_P : Alarm_Temperatures;
+      Minimum_Pump_Run_Time_P : Minimun_Pump_Run_Times;
+      Maximum_Hot_Delay_P : Maximum_Hot_Delays;
+      Tank_Slope_P, Tank_Offset_P,
+        Panel_Slope_P, Panel_Offset_P : Controller_Reals;
+      Sanitise_Temperature_P : Sanitise_Temperatures;
+      Sanitise_Day_P : Sanitise_Days;
+      Boost_Hour_P : Boost_Hours;
+      Comfort_Temperature_P : Comfort_Temperatures;
+      Comfort_Hour_P : Comfort_Hours;
+   end User_Configuration;
+   
    protected body User_Configuration is
 
-      function Start_Difference return Start_Differences is
-        (Start_Difference_P);
-
-      function Stop_Difference return Stop_Differences is (Stop_Difference_P);
-
-      function Maximum_Tank_Temperature return Maximum_Tank_Temperatures is
-        (Maximum_Tank_Temperature_P);
-
-      function Alarm_Temperature return Alarm_Temperatures is
-        (Alarm_Temperature_P);
-
-      function Minimum_Pump_Run_Time return Minimun_Pump_Run_Times is
-        (Minimum_Pump_Run_Time_P);
-
-      function Maximum_Hot_Delay return Maximum_Hot_Delays is
-        (Maximum_Hot_Delay_P);
-
-      function Tank_Slope return Controller_Reals is (Tank_Slope_P);
-
-      function Tank_Offset return Controller_Reals is (Tank_Offset_P);
-
-      function Panel_Slope return Controller_Reals is (Panel_Slope_P);
-
-      function Panel_Offset return Controller_Reals is (Panel_Offset_P);
-
-      function Sanitise_Temperature return Sanitise_Temperatures is
-        (Sanitise_Temperature_P);
-
-      function Sanitise_Day return Sanitise_Days is (Sanitise_Day_P);
-
-      function Boost_Hour return Boost_Hours is (Boost_Hour_P);
+      entry Start_Difference (Result : out Start_Differences) when Defined is
       
-      function Comfort_Temperature return Comfort_Temperatures is
-        (Comfort_Temperature_P);
+      begin -- Start_Difference
+         Result := Start_Difference_P;
+      end Start_Difference;
 
-      function Comfort_Hour return Comfort_Hours is (Comfort_Hour_P);
+      entry Stop_Difference (Result : out Stop_Differences) when Defined is
+      
+      begin -- Stop_Difference
+         Result := Stop_Difference_P;
+      end Stop_Difference;
+
+      entry Maximum_Tank_Temperature (Result : out Maximum_Tank_Temperatures)
+        when Defined is
+        
+      begin -- Maximum_Tank_Temperature
+         Result := Maximum_Tank_Temperature_P;
+      end Maximum_Tank_Temperature;
+
+      entry Alarm_Temperature (Result : out Alarm_Temperatures) when Defined is
+      
+      begin -- Alarm_Temperature
+         Result := Alarm_Temperature_P;
+      end Alarm_Temperature;
+
+      entry Minimum_Pump_Run_Time (Result : out Minimun_Pump_Run_Times)
+        when Defined is
+      
+      begin -- Minimum_Pump_Run_Time
+         Result := Minimum_Pump_Run_Time_P;
+      end Minimum_Pump_Run_Time;
+
+      entry Maximum_Hot_Delay (Result : out Maximum_Hot_Delays) when Defined is
+      
+      begin -- Maximum_Hot_Delay
+         Result := Maximum_Hot_Delay_P;
+      end Maximum_Hot_Delay;
+
+      entry Tank_Slope (Result : out Controller_Reals) when Defined is
+      
+      begin -- Tank_Slope
+         Result := Tank_Slope_P;
+      end Tank_Slope;
+
+      entry Tank_Offset (Result : out Controller_Reals) when Defined is
+      
+      begin -- Tank_Offset
+         Result := Tank_Offset_P;
+      end Tank_Offset;
+
+      entry Panel_Slope (Result : out Controller_Reals) when Defined is
+      
+      begin --
+         Result := Panel_Slope_P;
+      end;
+
+      entry Panel_Offset (Result : out Controller_Reals) when Defined is
+      
+      begin -- Panel_Offset
+         Result := Panel_Offset_P;
+      end Panel_Offset;
+
+      entry Sanitise_Temperature (Result : out Sanitise_Temperatures)
+        when Defined is
+      
+      begin -- Sanitise_Temperature
+         Result := Sanitise_Temperature_P;
+      end Sanitise_Temperature;
+
+      entry Sanitise_Day (Result : out Sanitise_Days) when Defined is
+      
+      begin -- Sanitise_Day
+         Result := Sanitise_Day_P;
+      end Sanitise_Day;
+
+      entry Boost_Hour (Result : out Boost_Hours) when Defined is
+      
+      begin -- Boost_Hour
+         Result := Boost_Hour_P;
+      end Boost_Hour;
+      
+      entry Comfort_Temperature (Result : out Comfort_Temperatures)
+        when Defined is
+      
+      begin -- Comfort_Temperature
+         Result := Comfort_Temperature_P;
+      end Comfort_Temperature;
+
+      entry Comfort_Hour (Result : out Comfort_Hours) when Defined is
+      
+      begin -- Comfort_Hour
+         Result := Comfort_Hour_P;
+      end Comfort_Hour;
 
       procedure Read_Configuration is
 
@@ -213,9 +325,16 @@ package body Configuration is
             end if; -- Alarm_Temperature_P <= Maximum_Tank_Temperature_P
          end Read_Fields;
 
-      begin -- Reload_Configuration
+      begin -- Read_Configuration
          begin -- read header
-            Read_Header (Configuration_File_Name);
+            if Exists (Configuration_File_Name) then
+               Read_Header (Configuration_File_Name);
+               Put_Event ("Read " & Configuration_File_Name & ' ' & 
+               Local_Image (Modification_Time (Configuration_File_Name)));
+            else
+               raise Configuration_Error with Configuration_File_Name &
+                 "not found";
+            end if; -- Exists (Configuration_File_Name)
          exception
             when E : others =>
                raise Configuration_Error with
@@ -229,9 +348,145 @@ package body Configuration is
               "Configuration file " & Configuration_File_Name & " no data row";
          end if; -- Next_Row
          Close_CSV;
+         Defined := True;
       end Read_Configuration;
       
    end User_Configuration;
+
+   function Start_Difference return Start_Differences is
+   
+      Result : Start_Differences;
+      
+   begin -- Start_Difference
+      User_Configuration.Start_Difference (Result);
+      return Result;
+   end Start_Difference;
+
+   function Stop_Difference return Stop_Differences is
+   
+      Result : Stop_Differences;
+      
+   begin -- Stop_Difference
+      User_Configuration.Stop_Difference (Result);
+      return Result;
+   end Stop_Difference; 
+
+   function Maximum_Tank_Temperature return Maximum_Tank_Temperatures is
+   
+      Result : Maximum_Tank_Temperatures;
+      
+   begin -- Maximum_Tank_Temperature
+      User_Configuration.Maximum_Tank_Temperature (Result);
+      return Result;
+   end Maximum_Tank_Temperature;
+     
+   function Alarm_Temperature return Alarm_Temperatures is
+   
+      Result : Alarm_Temperatures;
+      
+   begin -- Alarm_Temperature
+      User_Configuration.Alarm_Temperature (Result);
+      return Result;
+   end Alarm_Temperature;
+
+   function Minimum_Pump_Run_Time return Minimun_Pump_Run_Times is
+   
+      Result : Minimun_Pump_Run_Times;
+      
+   begin -- Minimum_Pump_Run_Time
+      User_Configuration.Minimum_Pump_Run_Time (Result);
+      return Result;
+   end Minimum_Pump_Run_Time;
+
+   function Maximum_Hot_Delay return Maximum_Hot_Delays is
+   
+      Result : Maximum_Hot_Delays;
+      
+   begin -- Maximum_Hot_Delay
+      User_Configuration.Maximum_Hot_Delay (Result);
+      return Result;
+   end Maximum_Hot_Delay;
+
+   function Tank_Slope return Controller_Reals is
+   
+      Result : Controller_Reals;
+      
+   begin -- Tank_Slope
+      User_Configuration.Tank_Slope (Result);
+      return Result;
+   end Tank_Slope;
+
+   function Tank_Offset return Controller_Reals is
+   
+      Result : Controller_Reals;
+      
+   begin -- Tank_Offset
+      User_Configuration.Tank_Offset (Result);
+      return Result;
+   end Tank_Offset;
+
+   function Panel_Slope return Controller_Reals is
+   
+      Result : Controller_Reals;
+      
+   begin -- Panel_Slope
+      User_Configuration.Panel_Slope (Result);
+      return Result;
+   end Panel_Slope;
+
+   function Panel_Offset return Controller_Reals is
+   
+      Result : Controller_Reals;
+      
+   begin -- Panel_Offset
+      User_Configuration.Panel_Offset (Result);
+      return Result;
+   end Panel_Offset;
+
+   function Sanitise_Temperature return Sanitise_Temperatures is
+   
+      Result : Sanitise_Temperatures;
+      
+   begin -- Sanitise_Temperature
+      User_Configuration.Sanitise_Temperature (Result);
+      return Result;
+   end Sanitise_Temperature;
+
+   function Sanitise_Day return Sanitise_Days is
+   
+      Result : Sanitise_Days;
+      
+   begin -- Sanitise_Day
+      User_Configuration.Sanitise_Day (Result);
+      return Result;
+   end Sanitise_Day;
+
+   function Boost_Hour return Boost_Hours is
+   
+      Result : Boost_Hours;
+      
+   begin -- Boost_Hour
+      User_Configuration.Boost_Hour (Result);
+      return Result;
+   end Boost_Hour;
+   
+   function Comfort_Temperature return Comfort_Temperatures is
+   
+      Result : Comfort_Temperatures;
+      
+   begin -- Comfort_Temperature
+      User_Configuration.Comfort_Temperature (Result);
+      return Result;
+   end Comfort_Temperature;
+   
+   function Comfort_Hour return Comfort_Hours is
+   
+      Result : Comfort_Hours;
+      
+   begin -- Comfort_Hour
+      User_Configuration.Comfort_Hour (Result);
+      return Result;
+   end Comfort_Hour;
 
 begin -- Configuration
    User_Configuration.Read_Configuration;
