@@ -1,9 +1,15 @@
+with "libgpiod.gpr";
+
 project Build_All is
    for Languages    use ("Ada", "C");
+   
    for Source_Dirs use ("./src", "../Pi_Common/src", "../DJH/src",
                         "../Pi_Common_C/src");
+                        
    for Object_Dir use "./obj";
+   
    for Exec_Dir use "./obj";
+   
    for Main use ("test_controller.adb", "test_configuration.adb",
                  "hot_water_controller.adb", "pump_ui.adb", "hw_cost.adb");
                  
@@ -18,7 +24,7 @@ project Build_All is
    end Compiler;
 
    package Linker is
-      for Linker_Options use ("-g", "-v");
+      for Linker_Options use ("-g", "-v", "-lgpiod");
    end Linker;
 
 end Build_All;
