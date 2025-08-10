@@ -3,8 +3,9 @@
 
 -- Author    : David Haley
 -- Created   : 18/09/2017
--- Last Edit : 06/08/2025
+-- Last Edit : 09/08/2025
 
+-- 20250809 : Statistics Corrected and Temperature reporting added.
 -- 20250806 : Sampling rate matched to application rate, to reduce mains
 -- frequency interference.
 -- 20250804 : With and use for rpi_spi removed, spi dependancy limited to
@@ -12,10 +13,12 @@
 
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Calendar; use Ada.Calendar;
+with Ada.Exceptions; use Ada.Exceptions;
 with RPi_GPIO; use RPi_GPIO;
 with AD7091R2;
 with RPi_Watchdog;
 with DJH.Statistics;
+with DJH.Parse_CSV;
 
 procedure Test_Controller is
 
@@ -26,8 +29,22 @@ procedure Test_Controller is
 
    type Int_A_Volts is range A_Volts'First .. A_Volts'Last;
    
-   package ADC_Stats is new DJH.Statistics (Int_A_Volts);
+   type Float_15 is digits 15;
+   
+   subtype Temperatures is Float_15 range -10.0 .. 110.0;
+   
+   package ADC_Stats is new DJH.Statistics (Int_A_Volts, Float_15);
    use ADC_Stats;
+   
+	-- Calculated centre values A/D count
+	C_0 : constant A_Volts := 206;
+	C_100 : constant A_Volts := 3872;
+   
+   type Configurations is Record
+		Tank_Offset, Panel_Offset : Float_15 := 
+		  - Float_15 (C_0) * 100.00 / Float_15 (C_100 - C_0);
+		Tank_Slope, Panel_Slope : Float_15 := 100.0 / Float_15 (C_100 - C_0);
+	end record; -- Confifuration
 
    Pump_Relay : constant GPIO_Pins := Gen1;
    Fault_LED  : constant GPIO_Pins := Gen2;
@@ -73,9 +90,9 @@ procedure Test_Controller is
       Write_Pin (Pin_Low, Fault_LED);
    end Initialise_Pins;
    
-   function Menu return character is
+   function Menu return Character is
    
-	Test_Requested : Character;
+		Test_Requested : Character;
    
    begin -- Menu
       Put_Line ("0 Exit");
@@ -88,6 +105,8 @@ procedure Test_Controller is
       Put_Line ("7 Stop Watchdog Task (resets RPi if watchdog is enabled)");
       Put_Line ("8 Read RAW A/D data");
       Put_Line ("9 Reset A/D Test Statistics");
+      Put_Line ("A Read Configuration File");
+      Put_Line ("B Display Temperature");
       Put ("Test? ");
       Get (Test_Requested);
       return Test_Requested;
@@ -119,25 +138,74 @@ procedure Test_Controller is
       end loop; -- I in Natural range 1 .. Test_Reads
       New_Line;
       Put_Line ("Channel (0) ""Tank"" Results");
-      Put_Line ("Mean:" & Mean (Channel_0_Stats)'Img &
-                "  Variance:" & Variance (Channel_0_Stats)'Img);
+      Put_Line ("Mean:" & Mean (Channel_0_Stats)'Img & "  Standard Devietion:"
+                & Standard_Deviation (Channel_0_Stats)'Img);
       for I in Minimum (Channel_0_Stats) .. Maximum (Channel_0_Stats) loop
          Put_Line ('[' & I'Img & ']' & Frequency (Channel_0_Stats, I)'Img);
       end loop; -- in Minimum (Channel_0_Stats) .. Maximum (Channel_0_Stats)
       Put_Line ("Channel (1) ""Panel"" Results");
-      Put_Line ("Mean:" & Mean (Channel_1_Stats)'Img &
-                "  Variance:" & Variance (Channel_1_Stats)'Img);
+      Put_Line ("Mean:" & Mean (Channel_1_Stats)'Img & "  Standard_Deviatiob:"
+                & Standard_Deviation (Channel_1_Stats)'Img);
       for I in Minimum( Channel_1_Stats) .. Maximum (Channel_1_Stats) loop
          Put_Line ('[' & I'Img & ']' & Frequency (Channel_1_Stats, I)'Img);
       end loop; -- I in Minimum( Channel_1_Stats) .. Maximum (Channel_1_Stats)
    end Test_AD;
    
-   Channel_0_Stats, Channel_1_Stats : ADC_Stats.Data_Stores;
+   function Temperature (ADC_Count : in Float_15;
+                         Slope, Offset : in Float_15) return Temperatures is
+
+		function Second_Order_Correction (Temp : in Temperatures)
+													 return Temperatures is
+
+			-- This function applies a second order corection to temperature which
+			-- is which is based on a straight line approximation between 0C and
+			-- 100C. After the correction the error of approximately 0.4C at 50C is
+			-- removed. This reduces the error between 0C and 100C to a maximum of
+			-- 0.022 which is less than one count of the twelve bit ADC.
+
+			T : Float_15 := Float_15 (Temp);
+
+		begin -- Second_Order_Correction
+			return Temperatures (T + (1.558526E-4 * (T ** 2 - 100.0 * T)));
+		end Second_Order_Correction;
+   
+   begin -- Temperature
+		return Second_Order_Correction (Slope * ADC_Count + Offset);
+   end Temperature;
+   
+   procedure Read_Configuration (Configuration : out Configurations) is
+   
+		type Configuration_Items is
+		  (Tank_Slope, Tank_Offset, Panel_Slope, Panel_Offset);
+            
+		package Parser is new DJH.Parse_CSV (Configuration_Items);
+		use Parser;
+   
+   begin -- Read_Configuration
+		Read_Header ("Configuration.csv");
+		if Next_Row then
+			Configuration.Tank_Slope := Float_15'Value (Get_Value (Tank_Slope));
+			Configuration.Tank_Offset := Float_15'Value (Get_Value (Tank_Offset));
+			Configuration.Panel_Slope := Float_15'Value (Get_Value (Panel_Slope));
+			Configuration.Panel_Offset :=
+			  Float_15'Value (Get_Value (Panel_Offset));
+		else
+			Put_Line ("No data row available");
+		end if; -- Next_Row
+		Close_CSV;
+	exception
+		when E: Others =>
+			Put_Line ("Error reading configuration file");
+			Put_Line (Exception_Message (E));
+   end Read_Configuration;
+   
+   Channel_0_Stats, Channel_1_Stats : Data_Stores;
+   Configuration : Configurations;
 
 begin -- Test_Controller
-   Put_Line ("Test Controller 20250806");
+   Put_Line ("Test Controller 20250809");
    Initialise_Pins;
-   loop
+   loop -- Process one Menu item
       case Menu is
          when '0' =>
             Put_Line ("Pump Output Off");
@@ -179,10 +247,25 @@ begin -- Test_Controller
             Put_Line ("Resetting A/D Statistics");
             Clear (Channel_0_Stats);
             Clear (Channel_1_Stats);
+         when 'a' | 'A' =>
+				Put_Line ("Reading Configuration File");
+				Read_Configuration (Configuration);
+			when 'b' | 'B' =>
+				if ADC_Stats.Count (Channel_0_Stats) > 0 and
+				  ADC_Stats.Count (Channel_0_Stats) > 0 then
+				   Put_Line ("Channel 0 Temperature:" &
+				             Temperature (Mean (Channel_0_Stats),
+				                                Configuration.Tank_Slope,
+				                                Configuration.Tank_Offset)'Img);
+				   Put_Line ("Channel 1 Temperature:" &
+				             Temperature (Mean (Channel_1_Stats),
+				                                Configuration.Panel_Slope,
+				                                Configuration.Panel_Offset)'Img);
+				else
+					Put_Line ("No ADC data available");
+				end if; -- ADC_Stats.Count (Channel_0_Stats) > 0 and
          when others =>
             Put_Line ("Invalid Test Request");
       end case; -- Menu
-   end loop;
+   end loop; -- Process one Menu item
 end Test_Controller;
-
-
