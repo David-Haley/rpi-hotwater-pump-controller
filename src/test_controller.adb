@@ -3,8 +3,9 @@
 
 -- Author    : David Haley
 -- Created   : 18/09/2017
--- Last Edit : 09/08/2025
+-- Last Edit : 07/09/2025
 
+-- 20250907 : Optiom 'C' one second temperature measurement added.
 -- 20250809 : Statistics Corrected and Temperature reporting added.
 -- 20250806 : Sampling rate matched to application rate, to reduce mains
 -- frequency interference.
@@ -20,7 +21,9 @@ with RPi_Watchdog;
 with DJH.Statistics;
 with DJH.Parse_CSV;
 
-procedure Test_Controller is
+procedure Test_Controller is      
+   Sample_Frequency : constant Positive := 574; -- Hz
+   -- Highest sample rate orthogonal to harmonics of 48 Hz and 52 Hz
 
    package My_AD is new AD7091R2;
    use My_AD;
@@ -107,23 +110,22 @@ procedure Test_Controller is
       Put_Line ("9 Reset A/D Test Statistics");
       Put_Line ("A Read Configuration File");
       Put_Line ("B Display Temperature");
+      Put_Line ("C Sample A/D for 1 s and Display Temeperature");
       Put ("Test? ");
       Get (Test_Requested);
       return Test_Requested;
    end Menu;
 
-   procedure Test_AD (Channel_0_Stats, Channel_1_Stats : in out Data_Stores) is
+   procedure Test_AD (Channel_0_Stats, Channel_1_Stats : in out Data_Stores;
+                      Test_Reads : in Positive := 100000) is
 
-      Test_Reads : constant Positive := 100000;
-      Sample_Frequency : constant Positive := 574;
-		-- Highest sample rate orthogonal to harmonics of 48 Hz and 52 Hz
 		Interval : constant Duration := 1.0 / Duration (Sample_Frequency);
 		Next_Time : Time;
       AD_Result : A_Volt_Arrays;
       
    begin -- Test_AD
       Put_Line ("Testing A/D Converter for" & Test_Reads'Img & " Samples " &
-                "Sample Rate :" & Sample_Frequency'Img & " Test Time :" &
+                "Sample Rate :" & Sample_Frequency'Img & " Hz Test Time :" &
                 Natural'Image (Test_Reads / Sample_Frequency) & " s");
       Next_Time := Clock;
       for I in Natural range 1 .. Test_Reads loop
@@ -264,6 +266,18 @@ begin -- Test_Controller
 				else
 					Put_Line ("No ADC data available");
 				end if; -- ADC_Stats.Count (Channel_0_Stats) > 0 and
+			when 'c' | 'C' =>
+            Clear (Channel_0_Stats);
+            Clear (Channel_1_Stats);
+            Test_AD (Channel_0_Stats, Channel_1_Stats, Sample_Frequency);
+            Put_Line ("Channel 0 Temperature:" &
+                      Temperature (Mean (Channel_0_Stats),
+                                         Configuration.Tank_Slope,
+                                         Configuration.Tank_Offset)'Img);
+            Put_Line ("Channel 1 Temperature:" &
+                      Temperature (Mean (Channel_1_Stats),
+                                         Configuration.Panel_Slope,
+                                         Configuration.Panel_Offset)'Img);
          when others =>
             Put_Line ("Invalid Test Request");
       end case; -- Menu
