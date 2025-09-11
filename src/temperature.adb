@@ -3,7 +3,10 @@
 -- configuration temperature calibration parameters.
 -- Author    : David Haley
 -- Created   : 20/10/2017
--- Last Edit : 16/09/2023
+-- Last Edit : 11/09/2025
+
+-- 20250911 : Precision of second order increased, error reduced to much less
+-- than one ADC count.
 -- 20230916 :  Sample_Temperature declaration moved to specification.
 -- 20220506 : Port to native compiler and direct interface to C Buffer size
 -- increased from 128 to 574 to give maximum sample frequency between tenth and
@@ -60,14 +63,15 @@ package body Temperature is
 
          -- This function applies a second order corection to temperature which
          -- is which is based on a straight line approximation between 0C and
-         -- 100C. After the correction the error of approximately 0.4C at 50C is
-         -- removed. This reduces the error between 0C and 100C to a maximum of
-         -- 0.022 which is less than one count of the twelve bit ADC.
+         -- 100C.This reduces the error between 0 C and 100 C to a maximum of
+			-- 0.005 which is approximately a fifth of one count of the twelve bit
+         -- ADC.
 
+         C_50 : constant Controller_Reals := 1.501188318918680E-04;
          T : Controller_Reals := Controller_Reals (Temp);
 
       begin -- Second_Order_Correction
-         return Temperatures (T + (1.558526E-4 * (T ** 2 - 100.0 * T)));
+         return Temperatures (T + (C_50 * (T ** 2 - 100.0 * T)));
       end Second_Order_Correction;
 
       Tank_Sum : Sample_Sums;

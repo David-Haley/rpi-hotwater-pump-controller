@@ -3,8 +3,9 @@
 
 -- Author    : David Haley
 -- Created   : 18/09/2017
--- Last Edit : 07/09/2025
+-- Last Edit : 10/09/2025
 
+-- 20250910 : Greater precision in second order temperature correction.
 -- 20250907 : Optiom 'C' one second temperature measurement added.
 -- 20250809 : Statistics Corrected and Temperature reporting added.
 -- 20250806 : Sampling rate matched to application rate, to reduce mains
@@ -146,7 +147,7 @@ procedure Test_Controller is
          Put_Line ('[' & I'Img & ']' & Frequency (Channel_0_Stats, I)'Img);
       end loop; -- in Minimum (Channel_0_Stats) .. Maximum (Channel_0_Stats)
       Put_Line ("Channel (1) ""Panel"" Results");
-      Put_Line ("Mean:" & Mean (Channel_1_Stats)'Img & "  Standard_Deviatiob:"
+      Put_Line ("Mean:" & Mean (Channel_1_Stats)'Img & "  Standard_Deviation:"
                 & Standard_Deviation (Channel_1_Stats)'Img);
       for I in Minimum( Channel_1_Stats) .. Maximum (Channel_1_Stats) loop
          Put_Line ('[' & I'Img & ']' & Frequency (Channel_1_Stats, I)'Img);
@@ -163,12 +164,13 @@ procedure Test_Controller is
 			-- is which is based on a straight line approximation between 0C and
 			-- 100C. After the correction the error of approximately 0.4C at 50C is
 			-- removed. This reduces the error between 0C and 100C to a maximum of
-			-- 0.022 which is less than one count of the twelve bit ADC.
-
+			-- 0.005 which is approximately a fifth of one count of the twelve bit
+         -- ADC.
+         C_50 : constant Float_15 := 1.501188318918680E-04;
 			T : Float_15 := Float_15 (Temp);
 
 		begin -- Second_Order_Correction
-			return Temperatures (T + (1.558526E-4 * (T ** 2 - 100.0 * T)));
+			return Temperatures (T + (C_50 * (T ** 2 - 100.0 * T)));
 		end Second_Order_Correction;
    
    begin -- Temperature
