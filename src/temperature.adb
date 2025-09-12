@@ -3,8 +3,10 @@
 -- configuration temperature calibration parameters.
 -- Author    : David Haley
 -- Created   : 20/10/2017
--- Last Edit : 11/09/2025
+-- Last Edit : 12/09/2025
 
+-- 20250912 : Better value of correction cooeficient used, error reduced to one
+-- tenth of an ADC count.
 -- 20250911 : Precision of second order increased, error reduced to much less
 -- than one ADC count.
 -- 20230916 :  Sample_Temperature declaration moved to specification.
@@ -61,13 +63,13 @@ package body Temperature is
       function Second_Order_Correction (Temp : in Temperatures)
                                         return Temperatures is
 
-         -- This function applies a second order corection to temperature which
-         -- is which is based on a straight line approximation between 0C and
-         -- 100C.This reduces the error between 0 C and 100 C to a maximum of
-			-- 0.005 which is approximately a fifth of one count of the twelve bit
-         -- ADC.
+         -- This function applies a second order corection to the straight line
+         -- approximation of temperature between 0 C and 100 C. After corection
+         -- There is no error at 0 C, 50 C and 100 C. For other temperatures the
+         -- error is reduced to a maximum of 0.0025 C, which is approximately a
+         -- tenth of one count of the twelve bit ADC.
 
-         C_50 : constant Controller_Reals := 1.501188318918680E-04;
+         C_50 : constant Controller_Reals := 1.499610341517860E-04;
          T : Controller_Reals := Controller_Reals (Temp);
 
       begin -- Second_Order_Correction

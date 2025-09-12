@@ -2,8 +2,10 @@
 -- packages.
 -- Author    : David Haley
 -- Created   : 24/10/2017
--- Last Edit : 11/09/2025
+-- Last Edit : 12/09/2025
 
+-- 20250912 : Better value of correction cooeficient for Second order correction
+-- in temperature.adb.
 -- 20250911 : Second order correction precision increased in temperature.adb.
 -- 20250506 : Start_Logger and Start_User_Interface removed, to remove startup
 -- deadlock.
@@ -82,7 +84,7 @@ package body Global_Data is
    Pump_Relay : constant GPIO_Pins := Gen1;
    Fault_LED : constant GPIO_Pins := Gen2;
 
-   function Controller_Version return Version_String is ("20250911");
+   function Controller_Version return Version_String is ("20250912");
    
    -- Barriers have only been provided where a value could be undefined during
    -- startup. Barriers are not required where the variables are actually

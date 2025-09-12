@@ -3,8 +3,10 @@
 
 -- Author    : David Haley
 -- Created   : 18/09/2017
--- Last Edit : 10/09/2025
+-- Last Edit : 12/09/2025
 
+-- 20250912 : Better value of correction cooeficient used, error reduced to one
+-- tenth of an ADC count.
 -- 20250910 : Greater precision in second order temperature correction.
 -- 20250907 : Optiom 'C' one second temperature measurement added.
 -- 20250809 : Statistics Corrected and Temperature reporting added.
@@ -160,13 +162,13 @@ procedure Test_Controller is
 		function Second_Order_Correction (Temp : in Temperatures)
 													 return Temperatures is
 
-			-- This function applies a second order corection to temperature which
-			-- is which is based on a straight line approximation between 0C and
-			-- 100C. After the correction the error of approximately 0.4C at 50C is
-			-- removed. This reduces the error between 0C and 100C to a maximum of
-			-- 0.005 which is approximately a fifth of one count of the twelve bit
-         -- ADC.
-         C_50 : constant Float_15 := 1.501188318918680E-04;
+			-- This function applies a second order corection to the straight line
+         -- approximation of temperature between 0 C and 100 C. After corection
+         -- There is no error at 0 C, 50 C and 100 C. For other temperatures the
+         -- error is reduced to a maximum of 0.0025 C, which is approximately a
+         -- tenth of one count of the twelve bit ADC.
+         
+         C_50 : constant Float_15 := 1.499610341517860E-04;
 			T : Float_15 := Float_15 (Temp);
 
 		begin -- Second_Order_Correction
