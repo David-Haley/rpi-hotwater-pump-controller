@@ -3,8 +3,9 @@
 -- parameters that have been read in.
 -- Author    : David Haley
 -- Created   : 14/10/2017
--- Last Edit : 01/05/2025
+-- Last Edit : 08/10/2025
 
+-- 20251008 : Brightness setting added for LCD_Display.
 -- 20250501 : Barrier added to prevent values being read before they are
 -- defined, by being read from the configuration file.
 -- 20220715 : Sanities_Hour renamed to Boost_Hour, renames replaces extra layer
@@ -17,6 +18,7 @@
 -- not exported.
 
 with Pump_Controller_Types; use Pump_Controller_Types;
+with DFR0555_Display; use DFR0555_Display;
 
 package Configuration is
 
@@ -49,6 +51,8 @@ package Configuration is
    function Comfort_Temperature return Comfort_Temperatures;
    
    function Comfort_Hour return Comfort_Hours;
+   
+   Function LCD_Brightness return Backlight_Brightness;
    
    Configuration_Error : Exception;
 

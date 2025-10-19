@@ -3,8 +3,10 @@
 -- the controller programme.
 -- Author    : David Haley
 -- Created   : 29/10/2017
--- Last Edit : 01/05/2025
+-- Last Edit : 18/10/2025
 
+-- 20251018 : Fault annunciators corrected, "Pump Log" displayed with any fault
+-- condition.
 -- 20250501 : Flow animation symplified, and made aparently faster.
 -- 20230917 : Descriptive comment above updated, build date updated.
 -- 20220531 : Corrected issue with timeout when geting manual boost date.
@@ -80,7 +82,7 @@ package body User_Interface_Client is
 --     00000000001111111111222222222233333333334444444444555555555566666666667
 --     01234567890123456789012345678901234567890123456789012345678901234567890
       "Pump Controller version: YYYYMMDD                       Time: HH:MM:SS ",
-      "User Interface version: YYYYMMDD  Build: 20250501    +-------------+--+",
+      "User Interface version: YYYYMMDD  Build: 20251018    +-------------+--+",
       "Up Time:                                            /  Panel      /   |",
       "Temperature Difference: -TU.t C                    / Temperature /    |",
       "Average Temperature Difference: -HTU.t C          /    HTU.t C  /     |",
@@ -366,7 +368,6 @@ package body User_Interface_Client is
                if Fault_Table (Fault_Index) then
                   FG := FG_White;
                   BG := BG_Red;
-                     Put_Coloured_Text ("Pump Log", 2, Fault_Row_1, FG, BG);
                else
                   FG := FG_Black;
                   BG := BG_Green;

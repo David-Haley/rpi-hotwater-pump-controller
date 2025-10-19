@@ -3,8 +3,9 @@
 -- parameters that have been read in.
 -- Author    : David Haley
 -- Created   : 14/10/2017
--- Last Edit : 01/05/2025
+-- Last Edit : 08/10/2025
 
+-- 20251008 : Brightness setting (Backlight) added for LCD_Display.
 -- 20250501 : Barrier added to prevent values being read before they are
 -- defined, by being read from the configuration file.
 -- 20220715 : Sanities_Hour renamed to Boost_Hour, renames replaces extra layer
@@ -61,6 +62,8 @@ package body Configuration is
       
       entry Comfort_Hour (Result : out Comfort_Hours);
       
+      entry LCD_Brightness (Result : out Backlight_Brightness);
+      
       procedure Read_Configuration;
    
    private
@@ -78,6 +81,7 @@ package body Configuration is
       Boost_Hour_P : Boost_Hours;
       Comfort_Temperature_P : Comfort_Temperatures;
       Comfort_Hour_P : Comfort_Hours;
+      LCD_Brightness_P : Backlight_Brightness;
    end User_Configuration;
    
    protected body User_Configuration is
@@ -175,6 +179,12 @@ package body Configuration is
       begin -- Comfort_Hour
          Result := Comfort_Hour_P;
       end Comfort_Hour;
+      
+      entry LCD_Brightness (Result : out Backlight_Brightness) when Defined is
+      
+      begin -- LCD_Brightness
+         Result := LCD_Brightness_P;
+      end LCD_Brightness;
 
       procedure Read_Configuration is
 
@@ -183,7 +193,7 @@ package body Configuration is
             Alarm_Temperature, Minimum_Pump_Run_Time, Maximum_Hot_Delay,
             Tank_Slope, Tank_Offset, Panel_Slope, Panel_Offset,
             Sanitise_Temperature, Sanitise_Day, Boost_Hour,
-            Comfort_Temperature, Comfort_Hour);
+            Comfort_Temperature, Comfort_Hour, Backlight);
             
          package Parser is new DJH.Parse_CSV (Configuration_Items);
          use Parser;
@@ -315,6 +325,14 @@ package body Configuration is
                   raise Configuration_Error with "Comfort_Hour - " &
                   Exception_Message (E);
             end; -- Comfort_Hour
+            begin -- LCD_Brightness
+               LCD_Brightness_P :=
+                  Backlight_Brightness'Value (Get_Value (Backlight));
+            exception
+               when E : others =>
+                  raise Configuration_Error with "LCD_Brightness - " &
+                  Exception_Message (E);
+            end;-- LCD_Brightness
             if Start_Difference_P <= Stop_Difference_P then
                raise Configuration_Error with
                  "Start difference must be greater than stop difference";
@@ -487,6 +505,15 @@ package body Configuration is
       User_Configuration.Comfort_Hour (Result);
       return Result;
    end Comfort_Hour;
+   
+   function LCD_Brightness return Backlight_Brightness is
+
+      Result : Backlight_Brightness;
+
+   begin -- LCD_Brightness
+      User_Configuration.LCD_Brightness (Result);
+      return Result;
+   end LCD_Brightness;
 
 begin -- Configuration
    User_Configuration.Read_Configuration;

@@ -1,7 +1,9 @@
 -- This is a test program for configuration package
 -- Author    : David Haley
 -- Created   : 14/10/2017
--- Last Edit : 15/07/2022
+-- Last Edit : 08/10/2025
+
+-- 20251008 : LCD_Brightness added.
 -- 20220715 : Sanitise_Hour renamed to Boost_Hour
 -- 20220714 : Comfort_Hour added.
 -- 20220520 : Comfort_Temperature added.
@@ -15,7 +17,7 @@ with Configuration; use Configuration;
 procedure Test_Configuration is
 
 begin -- Test_Configuration
-   Put_Line ("Test Configuration version 20190404");
+   Put_Line ("Test Configuration version 20251008");
    Put ("Start:");
    Temperature_IO.Put (Start_Difference, 3, 2, 0);
    New_Line;
@@ -61,5 +63,6 @@ begin -- Test_Configuration
    Put ("Comfort Hour:");
    Comfort_Hour_IO.Put (Comfort_Hour, 3);
    New_Line;
+   Put_Line ("LCD Brightness:" & LCD_Brightness'Img);
    Put_Line ("Test Complete");
 end Test_Configuration;

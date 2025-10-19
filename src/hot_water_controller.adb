@@ -4,8 +4,14 @@
 -- System control is provided by a model 3B Raspberry Pi.
 -- Author    : David Haley
 -- Created   : 02/11/2017
--- Last Edit : 07/05/2025
+-- Last Edit : 19/10/2025
 
+-- 20251019 : The pump stop logic changed to delay stopping when the
+-- Maximum_Tank_Temperature is exceded. This should prevent short cycling by
+-- ensuring some overshoot in temperature. Fault LED extinguished on normal
+-- exit.
+-- 20251012 : I2C LCD DFR0555 added asynchronous interface, to display
+-- information locally.
 -- 20250507 : Explicit startup calls for data logger and user interface removed,
 -- To reduce potential for startup deadlock.
 -- 20250502 : Controller_State prefix removed from all Global_Data references.
@@ -61,6 +67,7 @@ with Temperature; use Temperature;
 with User_Interface_Server; use User_Interface_Server;
 with Data_Logger; use Data_Logger;
 with Boost; use Boost;
+with Local_Display; use Local_Display;
 
 procedure Hot_Water_Controller is
 
@@ -80,8 +87,11 @@ procedure Hot_Water_Controller is
       Put_Event ( "HWS Pump Controller version " & Controller_Version &
                     " started, accumulated pump run seconds:" &
                     Accumulated_Pump_Run_Time'Img);
+      Put_LCD_Line_1 ("Version " & Controller_Version);
       Handlers.Install; -- Ctrl C and SIGTERM Handelers
+      Put_Lcd_Line_2 ("Handlers        ");
       Main_Loop.Start;
+      Put_LCD_Line_2 ("Main Loop       ");
       Main_loop.Watchdog_Delay;
       -- allow for multiple current pump cycles before enabling watchdog;
       Put_Event ("Watchdog enabled");
@@ -104,6 +114,8 @@ procedure Hot_Water_Controller is
       Old_Time : Ada.Calendar.Time :=
         Ada.Calendar."+" (Ada.Calendar.Clock,
                           Standard.Duration (Loop_Interval));
+      Temp_T, Temp_P : String (1 .. 6);
+      Count_String : String (1 .. 4);
 
    begin -- Main_Loop
       accept Start;
@@ -123,6 +135,10 @@ procedure Hot_Water_Controller is
                   Stop_Logger;
                   Stop_User_Interface;
                   Stop_Events;
+                  -- Turn off fault LED
+                  for F in Fault_Types loop
+                     Clear_Fault (F);
+                  end loop; -- F in Fault_Types
                   Run_Main_Loop := False;
                end Stop;
          or
@@ -187,11 +203,14 @@ procedure Hot_Water_Controller is
             If Panel > Tank + Start_Difference and
               Tank < Maximum_Tank_Temperature and Average_Difference >= 0.0 then
                Pump_Start;
-            elsif (Panel < Tank + Stop_Difference and
-                     Pump_Run_Time >= Minimum_Pump_Run_Time)
-              or Tank >= Maximum_Tank_Temperature then
+            elsif (Panel < Tank + Stop_Difference or
+                   Tank >= Maximum_Tank_Temperature) and
+                   -- Exceeding the maximum tank temperature does not stop the
+                   -- pump immediately, enforcing the minimum run time should
+                   -- provide some hysteresis so the pump does not short cycle.
+                     Pump_Run_Time >= Minimum_Pump_Run_Time then
                Pump_Stop;
-            end if; -- End of pump control logic
+            end if; --  Panel > Tank + Start_Difference and ...
             if Tank > Alarm_Temperature then
                Set_Fault (Tank_Temperature);
             end if; -- Tank > Alarm_Temperature
@@ -200,7 +219,16 @@ procedure Hot_Water_Controller is
                -- should a large enough that the controller would never run long
                -- enough for Main_Loop_Counter to overflow but it ensures
                -- = test passes in the Watchdog_Delay entry.
-               Main_Loop_Counter := Main_Loop_Counter + 1;
+               Accumulated_IO.Put (Count_String, Main_Loop_Counter);
+               Main_Loop_Counter := @ + 1;
+               --               12345678    9012            3456
+               Put_LCD_Line_2 ("Watchdog" & Count_String & "    ");
+            else
+               Temperature_IO.Put (Temp_T, Tank, 1, 0);
+               Temperature_IO.Put (Temp_P, Panel, 1, 0);
+               --        12345678    901234    56
+               Put_LCD ("Manifold" & Temp_P & " C",
+                        "Cylinder" & Temp_T & " C");
             end if; -- Main_Loop_Counter <= Watchdog_Enable_Count
          end select;
       end loop; -- Run_Main_Loop
@@ -210,6 +238,7 @@ begin -- Hot_Water_Controller
    Initialise;
    Main_Loop.Stop; -- Only returns after main loop stopped
    Handlers.Remove; -- Ctrl C and SIGTERM Handelers
+   Stop_LCD;
    Set_Exit_Status (Success);
 exception
    when Event : others =>

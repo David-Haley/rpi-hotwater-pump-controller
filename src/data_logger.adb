@@ -1,8 +1,9 @@
 -- This package provides data logging for the Pump controller
 -- Author    : David Haley
 -- Created   : 14/10/2017
--- Last Edit : 06/05/2025
+-- Last Edit : 18/10/2025
 
+-- 20251018 : Setting of fault table items is now logged. 
 -- 20250506 : Start_Logger removed, to avoid startup deadlock.
 -- 20250502 : Controller_State prefix removed from all Global_Data references.
 -- 20230511 : Log files compacted by removal of leading spaces.
@@ -52,11 +53,15 @@ package body Data_Logger is
 
    Logging_File : File_Type;
    Log_Interval : constant Day_Duration := 60.0;
-   -- create a log entry at 1 minute inerevals
+   -- create a log entry at 1 minute interevals
    File_Commit_Interval : constant Duration := 3600.0;
    -- Commit logging files once per hour
+   
+   Saved_Fault_Table : Fault_Tables := (others => False);
+   -- Assumed to start fault free.
 
    function On_The_Hour (T : in Time) return Time is
+   
       -- Effectively rounds T down such that minutes and seconds are zero
 
       Year : Year_Number;
@@ -333,6 +338,7 @@ package body Data_Logger is
       Run_Logger : Boolean := True;
       Next_Time, Previous_Time : Time;
       Previous_Pump_Time, Logger_Pump_Time : Accumulated_Times;
+      Current_Fault_Table : Fault_Tables;
 
    begin -- Logger
       Write_Accumulated_Time (Read_Accumulated_Hours);
@@ -375,6 +381,36 @@ package body Data_Logger is
                end if; -- Logger_Pump_Time > Previous_Pump_Time
                Logging_File_Commit_Time.Set_Next_File_Commit;
             end if; -- Clock >= File_Commit_Time
+            Current_Fault_Table := Read_Fault_Table;
+            begin -- Fault logging exception block
+               -- Single shot reporting of faults to the event log.
+               if Current_Fault_Table (Accumulated_Time_File) and not
+                 Saved_Fault_Table (Accumulated_Time_File) then
+                  Saved_Fault_Table (Accumulated_Time_File) := True;
+                  Put_Event ("Accumulated pump time fault set");
+               end if; -- Current_Fault_Table (Accumulated_Time_File) and not...
+               if Current_Fault_Table (Log_File) and not
+                 Saved_Fault_Table (Log_File) then
+                  Saved_Fault_Table (Log_File) := True;
+                  Put_Event ("Log file fault set");
+               end if; -- Current_Fault_Table (Log_File) and not ...
+               if Current_Fault_Table (Tank_Temperature) and not
+                 Saved_Fault_Table (Tank_Temperature) then
+                  Saved_Fault_Table (Tank_Temperature) := True;
+                  Put_Event ("Tank over temperature fault set");
+               end if; -- Current_Fault_Table (Tank_Temperature) and not ...
+               if Current_Fault_Table (Boost_Failure) and not
+                 Saved_Fault_Table (Boost_Failure) then
+                  Saved_Fault_Table (Boost_Failure) := True;
+                  Put_Event ("Automatic Boost fault set");
+               end if; -- Current_Fault_Table (Boost_Failure) and not
+            exception
+               when others =>
+                  null;
+                  -- It is possible that the inability to create log entries has
+                  -- caused a fault to be set and any further attempts to log
+                  -- could raise further exceptions.
+            end; -- Fault logging exception block
          end select;
       end loop; -- Run_Logger
       Close (Logging_File);

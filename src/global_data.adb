@@ -2,8 +2,14 @@
 -- packages.
 -- Author    : David Haley
 -- Created   : 24/10/2017
--- Last Edit : 12/09/2025
+-- Last Edit : 19/10/2025
 
+-- 20251019 : Setting of Fault table items now logged. Fault LED extinguished on
+-- normal exit.
+-- 20251017 : The pump stop logic changed to delay stopping when the
+-- Maximum_Tank_Temperature is exceded. This should prevent short cycling by
+-- ensuring some overshoot in temperature.
+-- 20251012 : LCD display added.
 -- 20250912 : Better value of correction cooeficient for Second order correction
 -- in temperature.adb.
 -- 20250911 : Second order correction precision increased in temperature.adb.
@@ -18,7 +24,7 @@
 -- multiple instances on the same host.
 -- 20230511 : Log files compacted by removal of leading spaces.
 -- 20220820 :  Events_and_Errors move to DJH.Events_and_Errors.
--- 20220729 : Comfortable temteratire reached event added and reset event
+-- 20220729 : Comfortable temperature reached event added and reset event
 -- wording changed.
 -- 20220723 : Event added for comfort reset.
 -- 20220719 : Correction to test that calls Clear_Is_Comfortable, including
@@ -84,7 +90,7 @@ package body Global_Data is
    Pump_Relay : constant GPIO_Pins := Gen1;
    Fault_LED : constant GPIO_Pins := Gen2;
 
-   function Controller_Version return Version_String is ("20250912");
+   function Controller_Version return Version_String is ("20251019");
    
    -- Barriers have only been provided where a value could be undefined during
    -- startup. Barriers are not required where the variables are actually
