@@ -287,7 +287,7 @@ procedure HW_Cost is
    Start_Date, End_Date : Time;
    
 begin -- HW_Cost
-   Put_Line ("HW_Cost version 20260327");
+   Put_Line ("HW_Cost version 20260417");
    if Argument_Count = 2 then
       Start_Date := Get_Date (Argument (1));
       End_Date := Get_Date (Argument (2));
@@ -300,8 +300,9 @@ begin -- HW_Cost
    else
       Put_Line ("Usage: hw_cost Start_Date End_Date");
       Put_Line ("Dates must be in the form DD/MM/YYYY");
-      Put_Line ("File " & Parameter_File_Name & "Must exist in the directory");
-      Put_Line ("which the program is executed from, along with Event_Log.txt");
-      Put_Line ("and the year directories containing the log files.");
+      Put_Line ("File " & Parameter_File_Name & " must exist in the directory");
+      Put_Line ("from which the program is executed, along with");
+      Put_Line (Event_File_Name & " and the year directories containing the");
+      Put_Line ("log files.");
    end if; -- Argument_Count = 2
 end HW_Cost;
