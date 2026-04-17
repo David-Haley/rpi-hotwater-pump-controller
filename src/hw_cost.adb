@@ -1,12 +1,21 @@
--- Reads the Event_Log file to estimate the running time and cost of using the
--- boost element. The cost energy usage and cost requires the boost element
--- Watts and Electricity tariff to be read from "HW_Cost_Parameters.csv".
--- To calculate pump running costs, data is read from daily log files and it is 
--- assumed that the feedin (Export_Tariff) applies.
+--  Reads the Event_Log file to estimate the running time and cost of using the
+--  boost element. The cost energy usage and cost requires the boost element
+--  Watts and Electricity tariff to be read from "HW_Cost_Parameters.csv".
+--  To calculate pump running costs, data is read from daily log files and it is 
+--  assumed that the feedin (Export_Tariff) applies. Solar energy is estimated
+--  based in the flow read from the flow meter (assumed constant) and the
+--  temperature difference between the panel and tank temperatures and the time
+--  the pump runs. Clearly this is a fairly rough estimate due to the
+--  uncertanty in the small temperature difference and the flow meter. The solar
+--  energy is costed using the Import_Tarriff because this is what will
+--  substitute for any deficiency in solar energy.
 
--- Author    : David Haley
--- Created   : 11/06/2024
--- Last Edit : 14/06/2024
+--  Author    : David Haley
+--  Created   : 11/06/2024
+--  Last Edit : 17/04/2026
+
+--  20260417 : Apply trapezium rule to energy calculation.
+--  20260327: Estimated savings added.
 
 with Ada.Command_Line; use Ada.Command_Line;
 with Ada.Directories; use Ada.Directories;
@@ -16,10 +25,8 @@ with Ada.Strings; use Ada.Strings;
 with Ada.Strings.Maps.Constants; use Ada.Strings.Maps.Constants;
 with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 with Ada.Calendar; use Ada.Calendar;
---- with Ada.Calendar.Time_Zones;
 with Ada.Calendar.Arithmetic; use Ada.Calendar.Arithmetic;
 with Ada.Calendar.Formatting;
--- with Ada.Containers;
 with Ada.Containers.Ordered_Maps;
 with DJH.Parse_CSV;
 with DJH.Date_and_Time_Strings; use DJH.Date_and_Time_Strings;
@@ -31,22 +38,35 @@ procedure HW_Cost is
    CSV : constant String := "csv";
 
    type My_Real is digits 15;
-   subtype kWh is My_Real;
    type Dollars is delta 0.01 range 0.00 .. 10000.00;
    subtype Cents is My_Real range 0.0 .. 99.9999999999999;
    subtype Watts is Positive;
    subtype Seconds is Natural;
+   subtype Joules is My_Real;
 
    type Parameter_Stores is record
       Pump_Power : Watts;
       Max_Boost :  Ada.Calendar.Formatting.Hour_Number;
       Boost_Power : Watts;
       Import_Tariff, Export_Tariff : Cents;
+      Mass_Flow : My_Real; -- l/m
    end record; -- Parameter_Stores
    
    type Day_Data is record
       Pump_Time, Boost_Time : Seconds := 0;
+      Solar_Energy : Joules := 0.0;
    end record; -- Day_Data
+   
+   Specific_Heat : constant My_Real := 4.19e3;
+   --  J/(K*kg) at 50 C and constant pressure
+   Density : constant My_Real := 0.98802; -- kg/l at 50 C and one atmosphere
+   Flow_Conversion : constant My_Real := Density / 60.0; -- l/minute to kg/s
+   Power_Conversion : constant My_Real := Specific_Heat * Flow_Conversion;
+   --  W/(K*(l/minute))
+   J_Conversion : constant My_Real := 1.0 / (1000.0 * 3600.0); -- kWh/J
+   Test_Temperature : constant My_Real := 80.0;
+   --  If the tank temperature exceeds this temperature the pump is probably not
+   --  running so the solar energy should not be counted.
    
    package Day_Stores is new
       Ada.Containers.Ordered_Maps (Ada.Calendar.Time, Day_Data);
@@ -54,8 +74,8 @@ procedure HW_Cost is
    
    procedure Get_Parameters (Parameter_Store : out Parameter_Stores) is
    
-      type Cost_Parameters is
-        (Pump_Watts, Max_Boost, Boost_Watts, Import_Tariff, Export_Tariff);
+      type Cost_Parameters is (Pump_Watts, Max_Boost, Boost_Watts,
+        Import_Tariff, Export_Tariff, Mass_Flow);
         
       package Parse_Parameters is new DJH.Parse_CSV (Cost_Parameters);
       use Parse_Parameters;
@@ -71,6 +91,7 @@ procedure HW_Cost is
       Parameter_Store.Boost_Power := Watts'Value (Get_Value (Boost_Watts));
       Parameter_Store.Import_Tariff := Cents'Value (Get_Value (Import_Tariff));
       Parameter_Store.Export_Tariff := Cents'Value (Get_Value (Export_Tariff));
+      Parameter_Store.Mass_Flow := My_Real'Value (Get_Value (Mass_Flow));
       Close_CSV;
    end Get_Parameters;
       
@@ -81,7 +102,7 @@ procedure HW_Cost is
    end Trim_Date;
    
    procedure Read_Event_File (Day_Store : out Day_Stores.Map;
-                            Parameter_Store : in Parameter_Stores) is
+                              Parameter_Store : in Parameter_Stores) is
                             
       type Events is (Date, Time, Message);
    
@@ -143,11 +164,13 @@ procedure HW_Cost is
    end Read_Event_File;
    
    procedure Read_Log_Files (Start_Date, End_Date : in Time;
-                             Day_Store : in out Day_Stores.Map) is
+                             Day_Store : in out Day_Stores.Map;
+                             Parameter_Store : in Parameter_Stores) is
                              
       procedure Read_Log_File (File_Name : in String;
                                Log_Date : in Time;
-                               Day_Store : in out Day_Stores.Map) is
+                               Day_Store : in out Day_Stores.Map;
+                               Parameter_Store : in Parameter_Stores) is
                                
          type Logs is (Time, Tank_Temperature, Panel_Temperature, Pump_Output);
 
@@ -155,16 +178,33 @@ procedure HW_Cost is
          use Parse_Logs;
          
          Day_Value : Day_Data;
+         Previous_Temperature_Difference : My_Real := 0.0;
          
       begin -- Read_Log_File
          if Exists (File_Name) then
             Read_Header (File_Name, True); -- No '_' in header
             while Next_Row loop
-               Day_Value.Pump_Time := @ + 
-                 Seconds'Value (Get_Value (Pump_Output));
-            end loop;
+               if My_Real'Value (Get_Value (Panel_Temperature)) <
+                 Test_Temperature
+               then
+                  Day_Value.Pump_Time := @ + 
+                    Seconds'Value (Get_Value (Pump_Output));
+                  Day_Value.Solar_Energy := @ + 
+                    (My_Real (Seconds'Value (Get_Value (Pump_Output))) *
+                    (My_Real'Value (Get_Value (Panel_Temperature)) - 
+                    My_Real'Value (Get_Value (Tank_Temperature)) +
+                    Previous_Temperature_Difference) / 2.0);
+                    -- Use trapezium rule
+                  Previous_Temperature_Difference :=
+                    (My_Real'Value (Get_Value (Panel_Temperature)) - 
+                    My_Real'Value (Get_Value (Tank_Temperature)));
+               end if; -- My_Real'Value (Get_Value (Panel_Temperature)) < ..
+            end loop; -- Next_Row
+            Day_Value.Solar_Energy :=
+              @ * Power_Conversion * Parameter_Store.Mass_Flow;
             if Contains (Day_Store, Log_Date) then
                Day_Store (Log_Date).Pump_Time := Day_Value.Pump_Time;
+               Day_Store (Log_Date).Solar_Energy := Day_Value.Solar_Energy;
             else
                Include (Day_Store, Log_Date, Day_Value);
             end if; -- Contains (Day_Store, Log_Date)
@@ -182,7 +222,8 @@ procedure HW_Cost is
                                  Reverse_Date_String (Log_Date),
                                  CSV),
                         Log_Date,
-                        Day_Store);
+                        Day_Store,
+                        Parameter_Store);
          Log_Date := @ + Day_Duration'Last;
       end loop; -- Log_Date <= End_Date
    end Read_Log_Files;
@@ -194,48 +235,50 @@ procedure HW_Cost is
       function Cost (Time : in Seconds;
                      Power : in Watts;
                      Tariff : in Cents) return Dollars is
-      Jouls_per_kWh : constant My_Real := 3600.0 * 1000.00;
       
       begin -- Cost
          return Dollars (My_Real (Time * Power) * My_Real (Tariff)
-           / Jouls_per_kWh);
+           * J_Conversion);
+      end Cost;
+      
+      function Cost (Solar_Energy : Joules;
+                     Tariff : in Cents) return Dollars is
+      
+      begin -- Cost
+         return Dollars (Solar_Energy * My_Real (Tariff)
+           * J_Conversion);
       end Cost;
                      
       Report_File : File_Type;
-      Accumulated_Pump, Accumulated_Boost : Seconds := 0;
-      Day_Cost, Accumulated_Cost : Dollars;
+      Accumulator : Day_Data;
+      Accumulated_Cost, Accumulated_Saving : Dollars;
                      
    begin -- Report
+      for I in Iterate (Day_Store) loop
+         if Key (I) >= Start_Date and Key (I) <= End_Date then
+            Accumulator.Pump_Time := @ + Element (I).Pump_Time;
+            Accumulator.Boost_Time := @ + Element(I).Boost_Time;
+            Accumulator.Solar_Energy := @ + Element (I).Solar_Energy;
+         end if; -- Key (I) >= Start_Date and Key (I) <= End_Date
+      end loop; -- I in Iterate (Day_Store)
       Create (Report_File, Out_File, Compose ("", "Cost_" &
         Reverse_Date_String (Start_Date) & "_" &
         Reverse_Date_String (End_Date), CSV));
-      Put_Line (Report_File, """Date"",""Pump Seconds"",""Boost Seconds""" &
-                ",""Cost"",""Accumulated Cost""");
-      for I in Iterate (Day_Store) loop
-         if Key (I) >= Start_Date and Key (I) <= End_Date then
-            Day_Cost := Cost (Element (I).Pump_Time, 
-                              Parameter_Store.Pump_Power,
-                              Parameter_Store.Export_Tariff) +
-                        Cost (Element(I).Boost_Time,
-                              Parameter_Store.Boost_Power,
-                              Parameter_Store.Import_Tariff);
-            Accumulated_Pump := @ + Element (I).Pump_Time;
-            Accumulated_Boost := @ + Element(I).Boost_Time;
-            Accumulated_Cost := Cost (Accumulated_Pump, 
-                                      Parameter_Store.Pump_Power,
-                                      Parameter_Store.Export_Tariff) +
-                                Cost (Accumulated_Boost,
-                                      Parameter_Store.Boost_Power,
-                                      Parameter_Store.Import_Tariff);
-            Put (Report_File, Date_String (Full_Date, Key (I)) & ",");
-            Put (Report_File, Trim (Element (I).Pump_Time'Img, Both) & ",");
-            Put (Report_File,
-                 Trim (Element (I).Boost_Time'Img ,Both) & ",");
-            Put (Report_File, Trim (Day_Cost'Img, Both) & ",");
-            Put (Report_File, Trim (Accumulated_Cost'Img, Both) & ",");
-            New_Line (Report_File);
-         end if; -- Key (I) >= Start_Date and Key (I) <= End_Date
-      end loop; -- I in Iterate (Day_Store)
+      Put_Line (Report_File, """Pump Seconds"",""Boost Seconds""," &
+                """Accumulated Cost"",""Accumulated_Saving""");
+      Accumulated_Cost := Cost (Accumulator.Pump_Time, 
+                                Parameter_Store.Pump_Power,
+                                Parameter_Store.Export_Tariff) +
+                          Cost (Accumulator.Boost_Time,
+                                Parameter_Store.Boost_Power,
+                                Parameter_Store.Import_Tariff);
+      Accumulated_Saving := Cost (Accumulator.Solar_Energy,
+                                  Parameter_Store.Import_Tariff);
+      Put (Report_File, Trim (Accumulator.Pump_Time'Img, Both) & ",");
+      Put (Report_File, Trim (Accumulator.Boost_Time'Img ,Both) & ",");
+      Put (Report_File, Trim (Accumulated_Cost'Img, Both) & ",");
+      Put (Report_File, Trim (Accumulated_Saving'Img, Both));
+      New_Line (Report_File);
       Close (Report_File);
    end Report;
    
@@ -244,7 +287,7 @@ procedure HW_Cost is
    Start_Date, End_Date : Time;
    
 begin -- HW_Cost
-   Put_Line ("HW_Cost version 20240614");
+   Put_Line ("HW_Cost version 20260327");
    if Argument_Count = 2 then
       Start_Date := Get_Date (Argument (1));
       End_Date := Get_Date (Argument (2));
@@ -252,11 +295,11 @@ begin -- HW_Cost
       -- does not represent a valid Gregorian dates.
       Get_Parameters (Parameter_Store);
       Read_Event_File (Day_Store, Parameter_Store);
-      Read_Log_Files (Start_Date, End_Date, Day_Store);
+      Read_Log_Files (Start_Date, End_Date, Day_Store, Parameter_Store);
       Report (Start_Date, End_Date, Parameter_Store, Day_Store);
    else
       Put_Line ("Usage: hw_cost Start_Date End_Date");
-      Put_Line ("Dates must be in the form DD/MM/YYY");
+      Put_Line ("Dates must be in the form DD/MM/YYYY");
       Put_Line ("File " & Parameter_File_Name & "Must exist in the directory");
       Put_Line ("which the program is executed from, along with Event_Log.txt");
       Put_Line ("and the year directories containing the log files.");
