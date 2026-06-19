@@ -12,10 +12,11 @@
 
 --  Author    : David Haley
 --  Created   : 11/06/2024
---  Last Edit : 17/04/2026
+--  Last Edit : 17/06/2026
 
+--  20260617 : Compiler warnings removed.
 --  20260417 : Apply trapezium rule to energy calculation.
---  20260327: Estimated savings added.
+--  20260327 : Estimated savings added.
 
 with Ada.Command_Line; use Ada.Command_Line;
 with Ada.Directories; use Ada.Directories;
@@ -25,7 +26,6 @@ with Ada.Strings; use Ada.Strings;
 with Ada.Strings.Maps.Constants; use Ada.Strings.Maps.Constants;
 with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 with Ada.Calendar; use Ada.Calendar;
-with Ada.Calendar.Arithmetic; use Ada.Calendar.Arithmetic;
 with Ada.Calendar.Formatting;
 with Ada.Containers.Ordered_Maps;
 with DJH.Parse_CSV;
@@ -122,7 +122,7 @@ procedure HW_Cost is
          if Row_Number = 1 then
             Previous_Event_Time := Event_Time;
          end if; -- Row_Number = 1
-         if index (Get_Value (Message), "boost on", Forward, Lower_Case_Map)
+         if Index (Get_Value (Message), "boost on", Forward, Lower_Case_Map)
            > 0 then
             if Boost_On then
                -- Missing Boost Off
@@ -132,20 +132,20 @@ procedure HW_Cost is
                Day_Element.Boost_Time :=
                   Seconds (Ada.Calendar.Formatting.Seconds_Of
                   (Parameter_Store.Max_Boost, 0, 0)); 
-               include (Day_Store, Trim_Date (Event_Time), Day_Element);
+               Include (Day_Store, Trim_Date (Event_Time), Day_Element);
             end if; -- Boost_On
-            Boost_ON := True;
+            Boost_On := True;
             Previous_Event_Time := Event_Time;
-         elsif index (Get_Value (Message), "boost off", Forward,
+         elsif Index (Get_Value (Message), "boost off", Forward,
            Lower_Case_Map) > 0 then
             if Event_Time - Previous_Event_Time <
                Ada.Calendar.Formatting.Seconds_Of (Parameter_Store.Max_Boost,
                                                    0,
                                                    0) then
-              Day_Element.Boost_Time :=
-                Seconds (Ada.Calendar."-" (Event_Time, Previous_Event_Time));
-                -- This is very clumsey but necessary because of two instances
-                -- of "-" being visible via use clauses.
+               Day_Element.Boost_Time :=
+                 Seconds (Ada.Calendar."-" (Event_Time, Previous_Event_Time));
+               -- This is very clumsey but necessary because of two instances
+               -- of "-" being visible via use clauses.
             else
                -- missing event or events
                Put_Line ("Warning missing events after " &
@@ -155,7 +155,7 @@ procedure HW_Cost is
                  Seconds (Ada.Calendar.Formatting.Seconds_Of
                  (Parameter_Store.Max_Boost, 0, 0));
             end if; -- Event_Time - Previous_Event_Time < ...
-            include (Day_Store, Trim_Date (Event_Time), Day_Element);
+            Include (Day_Store, Trim_Date (Event_Time), Day_Element);
             Boost_On := False;
             Previous_Event_Time := Event_Time;
          end if; --  index (Get_Value (Message), "boost on", Forward, ...

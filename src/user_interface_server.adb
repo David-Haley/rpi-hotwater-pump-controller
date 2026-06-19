@@ -1,8 +1,9 @@
 -- This package provides server component for the user interface.
 -- Author    : David Haley
 -- Created   : 29/10/2017
--- Last Edit : 07/05/2025
+-- Last Edit : 19/06/2026
 
+--  20260619 : Compiler warnings removed.
 -- 20250507 : Start_User_Interface remoced to reduce potential for startup
 -- deadlock.
 -- 20250503 : Controller_State prefix removed from all Global_Data references.
@@ -33,8 +34,6 @@
 
 with Ada.Streams; use Ada.Streams;
 with Ada.Calendar; use Ada.Calendar;
-with Ada.Calendar.Time_Zones; use Ada.Calendar.Time_Zones;
-with Ada.Calendar.Formatting; use Ada.Calendar.Formatting;
 with GNAT.Sockets; use GNAT.Sockets;
 with DJH.Events_and_Errors; use DJH.Events_and_Errors;
 with Pump_Controller_Types; use Pump_Controller_Types;
@@ -49,9 +48,10 @@ package body User_Interface_Server is
 
       Run_User_Interface : Boolean := True;
       RX_Socket, TX_Socket : Socket_Type;
-      Server_Address : Sock_Addr_Type := (Family => Family_Inet,
-                                          Addr => Any_Inet_Addr,
-                                          Port => Server_Port);
+      Server_Address : constant Sock_Addr_Type := (Family => Family_Inet,
+                                                   Addr => Any_Inet_Addr,
+                                                   Port => Server_Port);
+
       procedure Process_Requests is
 
          Request_Record : Request_Records;

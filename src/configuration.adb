@@ -3,8 +3,9 @@
 -- parameters that have been read in.
 -- Author    : David Haley
 -- Created   : 14/10/2017
--- Last Edit : 08/10/2025
+-- Last Edit : 18/06/2026
 
+--  20260618 : Compiler warnings removed.
 -- 20251008 : Brightness setting (Backlight) added for LCD_Display.
 -- 20250501 : Barrier added to prevent values being read before they are
 -- defined, by being read from the configuration file.
@@ -19,7 +20,6 @@
 -- unnecessary context removed
 -- 20190306 : Maximum_Hot_Delay added as a configuration item
 
-with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Directories; use Ada.Directories;
 with Ada.Calendar.Formatting; use Ada.Calendar.Formatting;
 with Ada.Exceptions; use Ada.Exceptions;
@@ -28,7 +28,7 @@ with DJH.Parse_CSV;
 
 package body Configuration is
 
-   Configuration_File_Name : constant string := "Configuration.csv";
+   Configuration_File_Name : constant String := "Configuration.csv";
    
    protected User_Configuration is
 
@@ -188,7 +188,7 @@ package body Configuration is
 
       procedure Read_Configuration is
 
-         type configuration_Items is
+         type Configuration_Items is
            (Start_Difference, Stop_Difference, Maximum_Tank_Temperature,
             Alarm_Temperature, Minimum_Pump_Run_Time, Maximum_Hot_Delay,
             Tank_Slope, Tank_Offset, Panel_Slope, Panel_Offset,

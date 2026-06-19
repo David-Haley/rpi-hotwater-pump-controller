@@ -1,8 +1,9 @@
 -- This package provides data logging for the Pump controller
 -- Author    : David Haley
 -- Created   : 14/10/2017
--- Last Edit : 18/10/2025
+-- Last Edit : 19/06/2025
 
+--  20260619 : Compiler warnings removed.
 -- 20251018 : Setting of fault table items is now logged. 
 -- 20250506 : Start_Logger removed, to avoid startup deadlock.
 -- 20250502 : Controller_State prefix removed from all Global_Data references.
@@ -46,7 +47,7 @@ with Global_Data; use Global_Data;
 
 package body Data_Logger is
 
-   Accumulation_File_Name : String := "Total_Seconds.";
+   Accumulation_File_Name : constant String := "Total_Seconds.";
    Current_Extension : constant String := "txt";
    Backup_Extension : constant String := "bak";
    Temporary_Extension : constant String := "tmp";
@@ -57,7 +58,7 @@ package body Data_Logger is
    File_Commit_Interval : constant Duration := 3600.0;
    -- Commit logging files once per hour
    
-   Saved_Fault_Table : Fault_Tables := (others => False);
+   Saved_Fault_Table : Fault_Tables := [others => False];
    -- Assumed to start fault free.
 
    function On_The_Hour (T : in Time) return Time is
@@ -136,7 +137,7 @@ package body Data_Logger is
 
    begin -- Read_Accumulated_Hours
       begin -- read current file
-         Open (Accumulation_File, In_file,
+         Open (Accumulation_File, In_File,
                Accumulation_File_Name & Current_Extension);
          Accumulated_IO.Get (Accumulation_File, Result);
          Close (Accumulation_File);
@@ -150,7 +151,7 @@ package body Data_Logger is
             end if; -- Is_Open (Accumulation_File)
       end; -- read current file
       begin -- read backup file
-         Open (Accumulation_File, In_file,
+         Open (Accumulation_File, In_File,
                Accumulation_File_Name & Backup_Extension);
          Accumulated_IO.Get (Accumulation_File, Result);
          Close (Accumulation_File);
@@ -228,14 +229,14 @@ package body Data_Logger is
          Put_Error ("Updating accumulated time", Event);
    end Update_Accumulated_Time;
 
-   function Logging_Path (This_Time : Time) return string is
+   function Logging_Path (This_Time : Time) return String is
       -- returns "YYYY" representing the current year
 
    begin -- Logging_Path
       return Reverse_Date_String (This_Time) (1..4);
    end Logging_Path;
 
-   function Logging_File_Name (This_Time : Time) return string is
+   function Logging_File_Name (This_Time : Time) return String is
       -- returns "YYYYMMDD.csv" where YYYYMMDD represents the current date
 
    begin -- Logging_File_Name
@@ -297,7 +298,7 @@ package body Data_Logger is
       end if; -- Next_Day (This_Time, This_Time + Log_Interval)
    end Calculate_Next_Log_Entry;
 
-   Procedure Start_Logging (Logging_File : in out File_Type;
+   procedure Start_Logging (Logging_File : in out File_Type;
                             Next_Log_Entry : out Time) is
 
    begin -- Start_Logging
@@ -309,10 +310,10 @@ package body Data_Logger is
          Put_Error ("Start logging", Event);
    end Start_Logging;
 
-   Procedure Put_Log_Entry (Logging_File : in out File_Type;
+   procedure Put_Log_Entry (Logging_File : in out File_Type;
                             Logger_Pump_Time : in out Accumulated_Times) is
 
-        Output_Buffer : String (1 .. 5);
+      Output_Buffer : String (1 .. 5);
 
    begin -- Put_Log_Entry
       Put (Logging_File, Time_String & ',');
@@ -347,7 +348,7 @@ package body Data_Logger is
       Start_Logging (Logging_File, Next_Time);
       -- Next_Time is intitialiesd by Start_Logging
       Previous_Time := Next_Time - Log_Interval;
-      While Run_Logger loop
+      while Run_Logger loop
          select
             accept Stop do
                Run_Logger := False;

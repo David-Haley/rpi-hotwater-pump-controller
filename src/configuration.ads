@@ -3,8 +3,9 @@
 -- parameters that have been read in.
 -- Author    : David Haley
 -- Created   : 14/10/2017
--- Last Edit : 08/10/2025
+-- Last Edit : 18/06/2026
 
+--  20260618 : Compiler warnings removed.
 -- 20251008 : Brightness setting added for LCD_Display.
 -- 20250501 : Barrier added to prevent values being read before they are
 -- defined, by being read from the configuration file.
@@ -52,8 +53,8 @@ package Configuration is
    
    function Comfort_Hour return Comfort_Hours;
    
-   Function LCD_Brightness return Backlight_Brightness;
+   function LCD_Brightness return Backlight_Brightness;
    
-   Configuration_Error : Exception;
+   Configuration_Error : exception;
 
 end Configuration;

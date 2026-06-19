@@ -4,8 +4,9 @@
 -- System control is provided by a model 3B Raspberry Pi.
 -- Author    : David Haley
 -- Created   : 02/11/2017
--- Last Edit : 19/10/2025
+-- Last Edit : 17/06/2026
 
+--  20260617 : Compiler warnings removed
 -- 20251019 : The pump stop logic changed to delay stopping when the
 -- Maximum_Tank_Temperature is exceded. This should prevent short cycling by
 -- ensuring some overshoot in temperature. Fault LED extinguished on normal
@@ -52,7 +53,6 @@
 -- 20171108 Corrected Shutdown Message
 -- 20171106 Controller_State.Increment_Run_Time made unconditional
 
-with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Real_Time; use Ada.Real_Time;
 with Ada.Calendar;
 with Ada.Command_Line; use Ada.Command_Line;
@@ -89,10 +89,10 @@ procedure Hot_Water_Controller is
                     Accumulated_Pump_Run_Time'Img);
       Put_LCD_Line_1 ("Version " & Controller_Version);
       Handlers.Install; -- Ctrl C and SIGTERM Handelers
-      Put_Lcd_Line_2 ("Handlers        ");
+      Put_LCD_Line_2 ("Handlers        ");
       Main_Loop.Start;
       Put_LCD_Line_2 ("Main Loop       ");
-      Main_loop.Watchdog_Delay;
+      Main_Loop.Watchdog_Delay;
       -- allow for multiple current pump cycles before enabling watchdog;
       Put_Event ("Watchdog enabled");
       Enable_Watchdog;
@@ -104,7 +104,7 @@ procedure Hot_Water_Controller is
 
       Watchdog_Enable_Count : constant Natural := 100;
       Loop_Interval : constant Integer := 1; -- Main loop runs once per second
-      Main_Loop_Interval : constant Time_Span := Seconds (Loop_interval);
+      Main_Loop_Interval : constant Time_Span := Seconds (Loop_Interval);
       Current_Seconds : Seconds_Count;
       Current_Time_Span : Time_Span;
       Next_Time : Time := Clock + Main_Loop_Interval;
@@ -200,7 +200,7 @@ procedure Hot_Water_Controller is
             -- time should have elapsed as indicated from the temperature
             -- measurement process.
             -- Start of pump control logic
-            If Panel > Tank + Start_Difference and
+            if Panel > Tank + Start_Difference and
               Tank < Maximum_Tank_Temperature and Average_Difference >= 0.0 then
                Pump_Start;
             elsif (Panel < Tank + Stop_Difference or

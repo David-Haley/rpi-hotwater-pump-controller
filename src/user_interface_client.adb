@@ -3,8 +3,9 @@
 -- the controller programme.
 -- Author    : David Haley
 -- Created   : 29/10/2017
--- Last Edit : 18/10/2025
+-- Last Edit : 19/10/2026
 
+--  20260619 : Compiler warnings removed.
 -- 20251018 : Fault annunciators corrected, "Pump Log" displayed with any fault
 -- condition.
 -- 20250501 : Flow animation symplified, and made aparently faster.
@@ -60,25 +61,25 @@ with GNAT.Sockets; use GNAT.Sockets;
 with Pump_Controller_Types; use Pump_Controller_Types;
 with Shared_User_Interface; use Shared_User_Interface;
 with DJH.Date_and_Time_Strings; use DJH.Date_and_Time_Strings;
-with ANSI_Console; use ANSI_console;
+with ANSI_Console; use ANSI_Console;
 
 package body User_Interface_Client is
 
-   Controller_Address : Sock_Addr_Type := (Family => Family_Inet,
-                                           Addr => Addresses (Get_Host_By_Name
-                                             (Controller_Name), 1),
-                                           Port => Server_Port);
+   Controller_Address : constant Sock_Addr_Type :=
+     (Family => Family_Inet, 
+      Addr => Addresses (Get_Host_By_Name (Controller_Name), 1),
+      Port => Server_Port);
 
-   Client_Address : Sock_Addr_Type := (Family => Family_Inet,
-                                       Addr => Any_Inet_Addr,
-                                       Port => Any_Port);
+   Client_Address : constant Sock_Addr_Type := (Family => Family_Inet,
+                                                Addr => Any_Inet_Addr,
+                                                Port => Any_Port);
 
    Client_Socket : Socket_Type;
 
    Screen_Width : constant := 71;
 
    Screen_Template : constant array (Y_Pos) of String (1 .. Screen_Width) :=
-     (
+     [
 --     00000000001111111111222222222233333333334444444444555555555566666666667
 --     01234567890123456789012345678901234567890123456789012345678901234567890
       "Pump Controller version: YYYYMMDD                       Time: HH:MM:SS ",
@@ -105,7 +106,7 @@ package body User_Interface_Client is
       "+-----------------------------------------+---------------------------+",
       "| Messages:                                                           |",
       "+---------------------------------------------------------------------+"
-     );
+     ];
 
    task Process_Requests is
       entry RX_Ready;
@@ -145,7 +146,7 @@ package body User_Interface_Client is
          -- returns a value which is exactly on the next second
 
          Update_Interval : constant Day_Duration := 1.0; -- Run at 1 Hz
-         Next_Time : Time := Clock + Update_Interval;
+         Next_Time : constant Time := Clock + Update_Interval;
 
       begin -- Next_Second
          return Time_Of (Ada.Calendar.Formatting.Year (Next_Time),
@@ -167,7 +168,7 @@ package body User_Interface_Client is
             delay 3.0;
          end;
 
-         Date_In : Date_Strings := Date_String (Full_Date);
+         Date_In : constant Date_Strings := Date_String (Full_Date);
          Entered_Date : Time;
          Text : Unbounded_String;
          Prompt : constant String := "Enter date: ";
@@ -176,7 +177,6 @@ package body User_Interface_Client is
 
       begin -- Get_Boost_Date
          loop -- get valid date
-            Valid := True;
             Boost_Date := Clock;
             Entered_Date := Boost_Date;
             Clear_Screen;
@@ -198,7 +198,7 @@ package body User_Interface_Client is
                   null; -- Date unchanged
                elsif Date_Strings'Length > Length (Text) then
                   Entered_Date := Get_Date (Replace_Slice (Date_In, 1,
-                                            Length (text), To_String (Text)));
+                                            Length (Text), To_String (Text)));
                else
                   Message ("Too much text entered");
                   Valid := False;
@@ -307,21 +307,21 @@ package body User_Interface_Client is
 
          procedure Animate_Pump (Running : in Boolean) is
 
-            Pump_X : X_Pos := 21;
-            Pump_Y : Y_Pos := 11;
-            Cold_X : X_Pos := 41;
-            Cold_Y : Y_Pos := 10;
-            Hot_X : X_Pos := 17;
-            Hot_Y : Y_Pos := 15;
+            Pump_X : constant X_Pos := 21;
+            Pump_Y : constant Y_Pos := 11;
+            Cold_X : constant X_Pos := 41;
+            Cold_Y : constant Y_Pos := 10;
+            Hot_X : constant X_Pos := 17;
+            Hot_Y : constant Y_Pos := 15;
 
             subtype Flow_String is String (1 .. 4);
 
             Animation : constant array (Amnimation_States) of
-              String (1 .. 1):= ("-", "\", "|", "/");
+              String (1 .. 1) := ["-", "\", "|", "/"];
             Cold_Animation : constant array (Amnimation_States) of
-              Flow_String := (">>..", ".>>.", "..>>", ">..>");
+              Flow_String := [">>..", ".>>.", "..>>", ">..>"];
             Hot_Animation : constant array (Amnimation_States) of
-              Flow_String := ("..<<", ".<<.", "<<..", "<..<");
+              Flow_String := ["..<<", ".<<.", "<<..", "<..<"];
             No_Flow : constant Flow_String := "    ";
 
          begin -- Animate_Pump
@@ -380,7 +380,7 @@ package body User_Interface_Client is
                   when Tank_Temperature =>
                      Put_Coloured_Text ("Tank Temperature", 20, Fault_Row_1,
                                         FG, BG);
-                 when Boost_Failure =>
+                  when Boost_Failure =>
                      Put_Coloured_Text ("Auto Boost", 2, Fault_Row_2, FG, BG);
                end case; -- Fault_Index
             end loop; -- Fault_Index in Fault_Types
@@ -487,7 +487,7 @@ package body User_Interface_Client is
                Supress_Timeout := False;
                Goto_XY (62, 0);
                Put (Time_String (Status.Controller_Time));
-               GoTo_XY (25, 0);
+               Goto_XY (25, 0);
                Put (Status.Controller_Version);
                Goto_XY (5, 14);
                Temperature_IO.Put (Status.Tank_Temperature, 3, 1, 0);

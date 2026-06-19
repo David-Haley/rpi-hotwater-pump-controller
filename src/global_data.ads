@@ -2,8 +2,9 @@
 -- packages.
 -- Author    : David Haley
 -- Created   : 24/10/2017
--- Last Edit : 02/05/2025
+-- Last Edit : 19/06/2026
 
+--  20260619 : Compiler warnings removed.
 -- 20250502 : Barriers added to ensure that values are defined before being
 -- read.
 -- 20220715 : Sanitise_Hour changed to Boost_Hour, various renames replaced
@@ -20,7 +21,6 @@
 -- 06/11/2017 Controller up time added
 -- 03/11/2017 Controller_States migrated here
 
-with Ada.Calendar; use Ada.Calendar;
 with Pump_Controller_Types; use Pump_Controller_Types;
 
 package Global_Data is

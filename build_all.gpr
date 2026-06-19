@@ -1,4 +1,4 @@
-with "libgpiod.gpr";
+with "../Pi_Common/lib_gpiod.gpr";
 
 project Build_All is
    for Languages    use ("Ada", "C");
@@ -12,19 +12,20 @@ project Build_All is
    
    for Main use ("test_controller.adb", "test_configuration.adb",
                  "hot_water_controller.adb", "pump_ui.adb", "hw_cost.adb");
-                 
-   package Naming is
-      for Specification_Suffix ("C") use ".h";
-      for Implementation_Suffix ("C") use ".c";
-   end Naming;
 
    package Compiler is
-     for Default_Switches ("Ada") use ("-g", "-gnat2022");
+     for Default_Switches ("Ada") use ("-g", "-gnat2022", "-gnatd_F",
+        "-gnatwa", "-gnatVa", "-gnatyk", "-gnaty3", "-gnatya", "-gnatyk",
+        "-gnatyl", "-gnatyn", "-gnatyr", "-gnaty-d");
      for Default_Switches ("C") use ("-g", "-pedantic");
    end Compiler;
 
+   package Binder is
+      for Switches ("Ada") use ("-Es"); --  Symbolic traceback
+   end Binder;
+
    package Linker is
-      for Linker_Options use ("-g", "-v", "-lgpiod");
+      for Linker_Options use ("-g", "-v");
    end Linker;
 
 end Build_All;

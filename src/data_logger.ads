@@ -1,8 +1,9 @@
 -- This package provides data logging for the Pump controller
 -- Author    : David Haley
 -- Created   : 21/10/2017
--- Last Edit : 06/05/2025
+-- Last Edit : 19/06/2025
 
+--  20260619 : Compilerwarnings removed.
 -- 20250506 : Start_Logger removed, to avoid startup deadlock.
 -- 20220715 : Indirect calls to Logger.Start and Stop_Loggerconverted to renames
 -- 20210220 : Event and error management removed to Events_and_Errors.
@@ -12,7 +13,6 @@
 -- and standard output managed here.
 -- 20190216 : Read_File_Commit_Time added.
 
-with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Calendar; use Ada.Calendar;
 
 package Data_Logger is

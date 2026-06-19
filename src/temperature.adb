@@ -3,8 +3,10 @@
 -- configuration temperature calibration parameters.
 -- Author    : David Haley
 -- Created   : 20/10/2017
--- Last Edit : 12/09/2025
+-- Last Edit : 19/06/2026
 
+--  20260619 : Compiler warnings removed and priority specified for
+--  Temperature_Data_Type.
 -- 20250912 : Better value of correction cooeficient used, error reduced to one
 -- tenth of an ADC count.
 -- 20250911 : Precision of second order increased, error reduced to much less
@@ -23,10 +25,9 @@
 -- startup issue resulting in irregular operation of the watchdog whilst the RPi
 -- time is being corrected as a result of update from NTP.
 
-with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Real_Time; use Ada.Real_Time;
 with Configuration; use Configuration;
-with AD7091r2;
+with AD7091R2;
 
 package body Temperature is
 
@@ -38,7 +39,7 @@ package body Temperature is
    subtype Sample_Sums is Natural range 0 ..
      Buffer_Size * (Natural (A_Volts'Last) + 1);
 
-   protected type Temperature_Data_Type is
+   protected type Temperature_Data_Type with Priority => Priority'Last is
 
       procedure Write_Buffer (Temperature_Sample : in A_Volt_Arrays);
 
@@ -51,7 +52,7 @@ package body Temperature is
    private
       Buffer_Index : Buffer_Indices := 0;
       Average_Calculated : Boolean := False;
-      Circular_Buffer : Circular_Buffers := (others => (others => 0));
+      Circular_Buffer : Circular_Buffers := [others => [others => 0]];
       Progress_Count : Natural := 0;
    end Temperature_Data_Type;
 
@@ -70,7 +71,7 @@ package body Temperature is
          -- tenth of one count of the twelve bit ADC.
 
          C_50 : constant Controller_Reals := 1.499610341517860E-04;
-         T : Controller_Reals := Controller_Reals (Temp);
+         T : constant Controller_Reals := Controller_Reals (Temp);
 
       begin -- Second_Order_Correction
          return Temperatures (T + (C_50 * (T ** 2 - 100.0 * T)));
@@ -97,7 +98,7 @@ package body Temperature is
    end Reset_Progress;
 
    procedure Samplmpling_Progressing is
-   Take_Samples : Boolean := True;
+   
       -- Returns when progress is indicated. Criteria half buffer has been
       -- filled and both averages have been calculated.
 
@@ -123,7 +124,7 @@ package body Temperature is
             delay until Next_Time;
             Temperature_Data.Write_Buffer (AD_Read);
             -- read one sample
-            if Clock - Next_Time > Seconds (10) then
+            if Clock - Next_Time > Seconds (3) then
                -- big step forward in time, step back not possible
                Next_Time := Clock + Sample_Interval;
             else
@@ -139,8 +140,8 @@ package body Temperature is
 
       begin -- Write_Buffer
          Circular_Buffer (Buffer_Index) := Temperature_Sample;
-         Buffer_Index := Buffer_Index + 1;
-         Progress_Count := Progress_Count + 1;
+         Buffer_Index := @ + 1;
+         Progress_Count := @ + 1;
       end Write_Buffer;
 
       procedure Get_Sums (Tank_Sum : out Sample_Sums;

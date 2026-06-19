@@ -5,9 +5,11 @@
 
 -- Author:    David Haley
 -- Created:   12/10/2025
--- Last Edit: 12/10/2025
+-- Last Edit: 19/06/2026
 
-with DFR0555_display; use DFR0555_display;
+--  20260619 : Removal of Compiler warnings.
+
+with DFR0555_Display; use DFR0555_Display;
 
 package Local_Display is
 

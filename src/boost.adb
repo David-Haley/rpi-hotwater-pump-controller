@@ -2,8 +2,9 @@
 -- purposes of sanitising (killing Leagionella) and for comfort.
 -- Author    : David Haley
 -- Created   : 04/04/2019
--- Last Edit : 02/05/2025
+-- Last Edit : 19/06/2026
 
+--  20260619 : Compiler warnings removed
 -- 20250502 : Controller_State prefix removed from all Global_Data references.
 -- 20230916 : Boost task renamed to Boost_Task to avoid conflict with package
 -- name. Boost start delayed to allow home automation to start first.
@@ -29,12 +30,10 @@
 -- 20190407 : Debug code inserted
 
 with Ada.Text_IO; use Ada.Text_IO;
-with Ada.Calendar; use Ada.Calendar;
 with Ada.Calendar.Arithmetic; use Ada.Calendar.Arithmetic;
 with Ada.Calendar.Time_Zones; use Ada.Calendar.Time_Zones;
 with Ada.Calendar.Formatting; use Ada.Calendar.Formatting;
 with Ada.Directories; use Ada.Directories;
-with DJH.Date_and_Time_Strings; use DJH.Date_and_Time_Strings;
 with DJH.Events_and_Errors; use DJH.Events_and_Errors;
 with Pump_Controller_Types; use Pump_Controller_Types;
 with Configuration; use Configuration;
@@ -43,13 +42,13 @@ with Home_Automation; use Home_Automation;
 
 package body Boost is
 
-   Next_Boost_File_Name : String := "Next_Boost.";
+   Next_Boost_File_Name : constant String := "Next_Boost.";
    Current_Extension : constant String := "txt";
    Backup_Extension : constant String := "bak";
    Temporary_Extension : constant String := "tmp";
    Run_Interval : constant Duration := 60.0;
 
-   function Next_Boost_Time (T : in Time) return time is
+   function Next_Boost_Time (T : in Time) return Time is
    
       -- returns a time where the hour is the Sanitise_Hour as specified in the
       -- configuration file. This time can be in the past if the hour in T is
@@ -88,7 +87,7 @@ package body Boost is
       Boost_Time.Next_Boost_Time := Next_Boost_Time (Clock);
       Boost_Time.Mandatory_Boost_Time := Boost_Time.Next_Boost_Time;
       begin -- read current file
-         Open (Boost_File, In_file,
+         Open (Boost_File, In_File,
                Next_Boost_File_Name & Current_Extension);
          Boost_Time.Next_Boost_Time := Value (Get_Line (Boost_File));
          Boost_Time.Mandatory_Boost_Time := Value (Get_Line (Boost_File));
@@ -105,7 +104,7 @@ package body Boost is
       if not Success then
          Success := True;
          begin -- read backup file
-            Open (Boost_File, In_file,
+            Open (Boost_File, In_File,
                   Next_Boost_File_Name & Backup_Extension);
             Boost_Time.Next_Boost_Time := Value (Get_Line (Boost_File));
             Boost_Time.Mandatory_Boost_Time := Value (Get_Line (Boost_File));
@@ -115,7 +114,7 @@ package body Boost is
             Create (Boost_File, Out_File,
                     Next_Boost_File_Name & Current_Extension);
             Put_Line (Boost_File, Image (Boost_Time.Next_Boost_Time));
-            Put_line (Boost_File, Image (Boost_Time.Mandatory_Boost_Time));
+            Put_Line (Boost_File, Image (Boost_Time.Mandatory_Boost_Time));
             Close (Boost_File);
          exception
             when Event : others =>
@@ -241,7 +240,7 @@ package body Boost is
       Previous_Hour : Hour_Number := Hour (Next_Time, Time_Zone);
       Boost_Time, Previous_Boost_Time : Boost_Times;
       Over_Comfort_Count, Over_Safe_Count : Natural := 0;
-      Boost_is_On, Is_Sanitise : Boolean := False;
+      Boost_Is_On, Is_Sanitise : Boolean := False;
       Remaining_Minutes : Natural := Boost_Limit;
 
    begin -- Boost
@@ -266,7 +265,7 @@ package body Boost is
             end; -- Stop_Boost
          or
             delay until Next_Time;
-            if Clock - Next_Time > 2.0 * Run_interval then
+            if Clock - Next_Time > 2.0 * Run_Interval then
                -- prevents loop running multiple times in quick sccession if
                -- there is a substantial step in time.
                Next_Time := Calculate_Next_Run_Time;
@@ -294,8 +293,8 @@ package body Boost is
                   end if; -- not Boost_Is_On
                   Set_Is_Comfortable;
                end if; -- not Is_Comfortable
-               if Boost_is_On and not Is_Sanitise then
-                  Boost_is_On := not Request_Boost_Off;
+               if Boost_Is_On and not Is_Sanitise then
+                  Boost_Is_On := not Request_Boost_Off;
                   Put_Event ("Request Boost off (comfort temperature reached)");
                end if; -- Boost_is_On and not Is_Sanitise
             end if; -- Over_Comfort_Count >= Safe_Count
@@ -309,8 +308,8 @@ package body Boost is
                -- This may occur many times but because effectively only the day
                -- can be incremented the stored value will typically only change
                -- once in a day
-               if Boost_is_On then
-                  Boost_is_On := not Request_Boost_Off;
+               if Boost_Is_On then
+                  Boost_Is_On := not Request_Boost_Off;
                   Is_Sanitise := False;
                   Put_Event ("Request Boost off (safe temperature reached)");
                end if; -- Boost_is_On
@@ -332,9 +331,9 @@ package body Boost is
                Previous_Boost_Time := Next_Boost;
             end if; -- Next_Boost /= Previous_Boost_Time
             if Hour (Boost_Time.Next_Boost_Time) = Hour (Clock) and
-              Boost_Time.Next_Boost_Time <= Clock and not Boost_is_On then
+              Boost_Time.Next_Boost_Time <= Clock and not Boost_Is_On then
                -- Initiate sanitie boost, terminated at Sanitise_Temperature
-               Boost_is_On := Request_Boost_On;
+               Boost_Is_On := Request_Boost_On;
                Is_Sanitise := True;
                Remaining_Minutes := Boost_Limit;
                if Boost_Time.Next_Boost_Time = Boost_Time.Mandatory_Boost_Time
@@ -344,16 +343,16 @@ package body Boost is
                   Put_Event ("Manual Request Boost On");
                end if; -- Boost_Time.Next_Boost_Time = ...
             elsif Hour (Boost_Time.Next_Boost_Time) = Hour (Clock) and
-              not Is_Comfortable and not Boost_is_On then
+              not Is_Comfortable and not Boost_Is_On then
                -- Initiate comfort, terminates at Comfort_Temperature
-               Boost_is_On := Request_Boost_On;
+               Boost_Is_On := Request_Boost_On;
                Remaining_Minutes := Boost_Limit;
                Put_Event ("Automatic comfort Request Boost On");
-            elsif Boost_is_On then
+            elsif Boost_Is_On then
                if Remaining_Minutes > 0 then
                   Remaining_Minutes := Remaining_Minutes - 1;
                else
-                  Boost_is_On := not Request_Boost_Off;
+                  Boost_Is_On := not Request_Boost_Off;
                   Is_Sanitise := False;
                   Put_Event ("Request Boost off (time expired)");
                   raise Boost_Failed with "Boost time expired";

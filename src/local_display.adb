@@ -5,14 +5,15 @@
 
 -- Author:    David Haley
 -- Created:   12/10/2025
--- Last Edit: 12/10/2025
+-- Last Edit: 19/06/2026
+
+--  20260619 : Removal of Compiler warnings.
 
 with Ada.Containers.Indefinite_Holders;
 with Ada.Containers.Synchronized_Queue_Interfaces;
 with Ada.Containers.Unbounded_Synchronized_Queues;
 with Configuration; use Configuration;
 with DJH.Events_and_Errors; use DJH.Events_and_Errors;
-with DFR0555_display; use DFR0555_display;
 
 package body Local_Display is
 
@@ -54,7 +55,7 @@ package body Local_Display is
    
       -- Enqueues request to update both lines of the display
 
-      Request : Requests (LCD_1_2) := (LCD_1_2, Line_1, Line_2);
+      Request : constant Requests (LCD_1_2) := (LCD_1_2, Line_1, Line_2);
       
    begin -- Put_LCD
       Request_Queue.Enqueue (To_Holder (Request));
@@ -64,7 +65,7 @@ package body Local_Display is
    
       -- Enqueues request to update the top line of the display
 
-      Request : Requests (LCD_1) := (LCD_1, Line);
+      Request : constant Requests (LCD_1) := (LCD_1, Line);
       
    begin -- Put_LCD_Line_1
       Request_Queue.Enqueue (To_Holder (Request));
@@ -74,7 +75,7 @@ package body Local_Display is
    
       -- Enqueues request to update the bottom line of the display
 
-      Request : Requests (LCD_2) := (LCD_2, Line);
+      Request : constant Requests (LCD_2) := (LCD_2, Line);
       
    begin -- Put_LCD_Line_2
       Request_Queue.Enqueue (To_Holder (Request));
@@ -96,9 +97,8 @@ package body Local_Display is
    
    task body Process_Requests is
    
-   Ready : Boolean := False;
-   Run : Boolean := True;
-   Request : Holder;
+      Ready : Boolean := False;
+      Request : Holder;
    
    begin -- Process_Requests
       select

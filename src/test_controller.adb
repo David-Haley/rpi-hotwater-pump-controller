@@ -3,8 +3,10 @@
 
 -- Author    : David Haley
 -- Created   : 18/09/2017
--- Last Edit : 12/09/2025
+-- Last Edit : 19/06/2026
 
+--  20260619 : Compiler warnings removed, change from Calendar to Real_Time to
+--  match Hot_Water_Controller.
 -- 20250912 : Better value of correction cooeficient used, error reduced to one
 -- tenth of an ADC count.
 -- 20250910 : Greater precision in second order temperature correction.
@@ -16,7 +18,7 @@
 -- AD7091R2 package. SPI now directly linked to C device driver.
 
 with Ada.Text_IO; use Ada.Text_IO;
-with Ada.Calendar; use Ada.Calendar;
+with Ada.Real_Time; use Ada.Real_Time;
 with Ada.Exceptions; use Ada.Exceptions;
 with RPi_GPIO; use RPi_GPIO;
 with AD7091R2;
@@ -42,15 +44,15 @@ procedure Test_Controller is
    package ADC_Stats is new DJH.Statistics (Int_A_Volts, Float_15);
    use ADC_Stats;
    
-	-- Calculated centre values A/D count
-	C_0 : constant A_Volts := 206;
-	C_100 : constant A_Volts := 3872;
+   -- Calculated centre values A/D counts
+   C_0 : constant A_Volts := 206;
+   C_100 : constant A_Volts := 3872;
    
-   type Configurations is Record
+   type Configurations is record
 		Tank_Offset, Panel_Offset : Float_15 := 
 		  - Float_15 (C_0) * 100.00 / Float_15 (C_100 - C_0);
 		Tank_Slope, Panel_Slope : Float_15 := 100.0 / Float_15 (C_100 - C_0);
-	end record; -- Confifuration
+   end record; -- Confifuration
 
    Pump_Relay : constant GPIO_Pins := Gen1;
    Fault_LED  : constant GPIO_Pins := Gen2;
@@ -62,7 +64,7 @@ procedure Test_Controller is
 
    task body Kick_Watchdog is
 
-      Kick_Interval : constant Duration := 0.5;
+      Kick_Interval : constant Time_Span := Milliseconds (500);
       Watchdog_State : Boolean := False;
       Exit_Now : Boolean := False;
       Next_Time : Time := Clock + Kick_Interval;
@@ -98,7 +100,7 @@ procedure Test_Controller is
    
    function Menu return Character is
    
-		Test_Requested : Character;
+      Test_Requested : Character;
    
    begin -- Menu
       Put_Line ("0 Exit");
@@ -122,8 +124,9 @@ procedure Test_Controller is
    procedure Test_AD (Channel_0_Stats, Channel_1_Stats : in out Data_Stores;
                       Test_Reads : in Positive := 100000) is
 
-		Interval : constant Duration := 1.0 / Duration (Sample_Frequency);
-		Next_Time : Time;
+      Interval : constant Time_Span :=
+        Microseconds (1000000 / Sample_Frequency);
+      Next_Time : Time;
       AD_Result : A_Volt_Arrays;
       
    begin -- Test_AD
@@ -136,10 +139,10 @@ procedure Test_Controller is
          Sample (Channel_0_Stats, Int_A_Volts (AD_Result (0)));
          Sample (Channel_1_Stats, Int_A_Volts (AD_Result (1)));
          if I mod 2000 = 0 then
-				Put ('.');
-			end if; -- I mod 2000 = 0
+			   Put ('.');
+         end if; -- I mod 2000 = 0
          Next_Time := @ + Interval;
-         Delay until Next_Time;
+         delay until Next_Time;
       end loop; -- I in Natural range 1 .. Test_Reads
       New_Line;
       Put_Line ("Channel (0) ""Tank"" Results");
@@ -159,7 +162,7 @@ procedure Test_Controller is
    function Temperature (ADC_Count : in Float_15;
                          Slope, Offset : in Float_15) return Temperatures is
 
-		function Second_Order_Correction (Temp : in Temperatures)
+      function Second_Order_Correction (Temp : in Temperatures)
 													 return Temperatures is
 
 			-- This function applies a second order corection to the straight line
@@ -169,40 +172,40 @@ procedure Test_Controller is
          -- tenth of one count of the twelve bit ADC.
          
          C_50 : constant Float_15 := 1.499610341517860E-04;
-			T : Float_15 := Float_15 (Temp);
+			T : constant Float_15 := Float_15 (Temp);
 
-		begin -- Second_Order_Correction
-			return Temperatures (T + (C_50 * (T ** 2 - 100.0 * T)));
-		end Second_Order_Correction;
+      begin -- Second_Order_Correction
+         return Temperatures (T + (C_50 * (T ** 2 - 100.0 * T)));
+      end Second_Order_Correction;
    
    begin -- Temperature
-		return Second_Order_Correction (Slope * ADC_Count + Offset);
+      return Second_Order_Correction (Slope * ADC_Count + Offset);
    end Temperature;
    
    procedure Read_Configuration (Configuration : out Configurations) is
    
-		type Configuration_Items is
+      type Configuration_Items is
 		  (Tank_Slope, Tank_Offset, Panel_Slope, Panel_Offset);
             
-		package Parser is new DJH.Parse_CSV (Configuration_Items);
-		use Parser;
+      package Parser is new DJH.Parse_CSV (Configuration_Items);
+      use Parser;
    
    begin -- Read_Configuration
-		Read_Header ("Configuration.csv");
-		if Next_Row then
+      Read_Header ("Configuration.csv");
+      if Next_Row then
 			Configuration.Tank_Slope := Float_15'Value (Get_Value (Tank_Slope));
 			Configuration.Tank_Offset := Float_15'Value (Get_Value (Tank_Offset));
 			Configuration.Panel_Slope := Float_15'Value (Get_Value (Panel_Slope));
 			Configuration.Panel_Offset :=
 			  Float_15'Value (Get_Value (Panel_Offset));
-		else
-			Put_Line ("No data row available");
-		end if; -- Next_Row
-		Close_CSV;
-	exception
-		when E: Others =>
-			Put_Line ("Error reading configuration file");
-			Put_Line (Exception_Message (E));
+      else
+         Put_Line ("No data row available");
+      end if; -- Next_Row
+      Close_CSV;
+   exception
+      when E: others =>
+         Put_Line ("Error reading configuration file");
+         Put_Line (Exception_Message (E));
    end Read_Configuration;
    
    Channel_0_Stats, Channel_1_Stats : Data_Stores;
@@ -221,8 +224,8 @@ begin -- Test_Controller
             Put_Line ("Disabling_Watchdog ready for exit");
             Disable_Watchdog;
             if not Kick_Watchdog'Terminated then
-					Put_Line ("Stopping Watchdog task ready for exit");
-					Kick_Watchdog.Stop_Watchdog;
+               Put_Line ("Stopping Watchdog task ready for exit");
+               Kick_Watchdog.Stop_Watchdog;
             end if; -- not Kick_Watchdog'Terminated
             Put_Line ("Ending Tests");
             exit;
@@ -254,22 +257,23 @@ begin -- Test_Controller
             Clear (Channel_0_Stats);
             Clear (Channel_1_Stats);
          when 'a' | 'A' =>
-				Put_Line ("Reading Configuration File");
-				Read_Configuration (Configuration);
+            Put_Line ("Reading Configuration File");
+            Read_Configuration (Configuration);
 			when 'b' | 'B' =>
-				if ADC_Stats.Count (Channel_0_Stats) > 0 and
-				  ADC_Stats.Count (Channel_0_Stats) > 0 then
-				   Put_Line ("Channel 0 Temperature:" &
+            if ADC_Stats.Count (Channel_0_Stats) > 0 and
+				  ADC_Stats.Count (Channel_0_Stats) > 0
+            then
+               Put_Line ("Channel 0 Temperature:" &
 				             Temperature (Mean (Channel_0_Stats),
 				                                Configuration.Tank_Slope,
 				                                Configuration.Tank_Offset)'Img);
-				   Put_Line ("Channel 1 Temperature:" &
+               Put_Line ("Channel 1 Temperature:" &
 				             Temperature (Mean (Channel_1_Stats),
 				                                Configuration.Panel_Slope,
 				                                Configuration.Panel_Offset)'Img);
-				else
-					Put_Line ("No ADC data available");
-				end if; -- ADC_Stats.Count (Channel_0_Stats) > 0 and
+            else
+               Put_Line ("No ADC data available");
+            end if; -- ADC_Stats.Count (Channel_0_Stats) > 0 and
 			when 'c' | 'C' =>
             Clear (Channel_0_Stats);
             Clear (Channel_1_Stats);

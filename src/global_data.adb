@@ -2,8 +2,9 @@
 -- packages.
 -- Author    : David Haley
 -- Created   : 24/10/2017
--- Last Edit : 19/10/2025
+-- Last Edit : 19/06/2026
 
+--  20260619 : Compiler warnings removed.
 -- 20251019 : Setting of Fault table items now logged. Fault LED extinguished on
 -- normal exit.
 -- 20251017 : The pump stop logic changed to delay stopping when the
@@ -75,22 +76,20 @@
 -- 20171106 : Controller up time added
 -- 20171103 : Controller_States migrated here
 
-with Ada.Text_IO; use Ada.Text_IO;
 with RPi_GPIO; use RPi_GPIO;
-with Pump_Controller_Types; use Pump_Controller_Types;
 with Configuration; use Configuration;
 
 package body Global_Data is
 
    type Difference_indices is mod Maximum_Hot_Delays'Last;
 
-   type Difference_Buffers is Array (Difference_indices) of
+   type Difference_Buffers is array (Difference_indices) of
      Temperature_Differences;
 
    Pump_Relay : constant GPIO_Pins := Gen1;
    Fault_LED : constant GPIO_Pins := Gen2;
 
-   function Controller_Version return Version_String is ("20251019");
+   function Controller_Version return Version_String is ("20260619");
    
    -- Barriers have only been provided where a value could be undefined during
    -- startup. Barriers are not required where the variables are actually
@@ -141,7 +140,7 @@ package body Global_Data is
       Defined_Temperature, Defined_Accumulated_Time, Defined_Boost_Time
         : Boolean := False; -- Initialise barriers
       Panel_Temperature_SV, Tank_Tempetature_SV : Temperatures := 0.0;
-      Difference_Buffer : Difference_Buffers := (others => 0.0);
+      Difference_Buffer : Difference_Buffers := [others => 0.0];
       -- Contains history of Panel_Temperature - Tank_Temperature
       Last_Write : Difference_indices := Difference_indices'First;
       -- Recordes last element of Difference_Buffer which was updated
@@ -154,7 +153,7 @@ package body Global_Data is
       Is_Comfortable_SV : Boolean := False;
       -- Records if Comfortable temperature has been reached since Comfort_Hour
       -- each day.
-      Fault_Table : Fault_Tables := (others => False);
+      Fault_Table : Fault_Tables := [others => False];
       -- Initialised to no fault
    end Controller_State;
 
@@ -288,9 +287,9 @@ package body Global_Data is
 
       begin -- Clear_Fault
          Fault_Table (Fault_Type) := False;
-         for Fault_index in Fault_Types loop
+         for Fault_Index in Fault_Types loop
             Is_Fault := @ or Fault_Table (Fault_Index);
-         end loop; -- Fault_index
+         end loop; -- Fault_Index
          if not Is_Fault then
             Write_Pin (Pin_Low, Fault_LED);
          end if; -- not Is_Fault
@@ -302,7 +301,7 @@ package body Global_Data is
 
    function Tank_Temperature return Temperatures is
    
-    Result : Temperatures;
+      Result : Temperatures;
    
    begin -- Tank_Temperature
       Controller_State.Tank_Temperature (Result);
@@ -311,7 +310,7 @@ package body Global_Data is
 
    function Panel_Temperature return Temperatures is
    
-    Result : Temperatures;
+      Result : Temperatures;
    
    begin -- Panel_Temperature
       Controller_State.Panel_Temperature (Result);
@@ -325,7 +324,7 @@ package body Global_Data is
 
    function Average_Difference return Temperature_Differences is
    
-    Result : Temperature_Differences;
+      Result : Temperature_Differences;
    
    begin -- Average_Difference
       Controller_State.Average_Difference (Result);
@@ -345,7 +344,7 @@ package body Global_Data is
 
    function Next_Boost return Boost_Times is
    
-    Result : Boost_Times;
+      Result : Boost_Times;
    
    begin -- Next_Boost
       Controller_State.Next_Boost (Result);
