@@ -2,8 +2,9 @@
 -- packages.
 -- Author    : David Haley
 -- Created   : 24/10/2017
--- Last Edit : 19/06/2026
+-- Last Edit : 21/06/2026
 
+--  20260621 : AD_Sample_Pin pulse polarity inverted.
 --  20260619 : Compiler warnings removed.
 -- 20251019 : Setting of Fault table items now logged. Fault LED extinguished on
 -- normal exit.
@@ -89,7 +90,7 @@ package body Global_Data is
    Pump_Relay : constant GPIO_Pins := Gen1;
    Fault_LED : constant GPIO_Pins := Gen2;
 
-   function Controller_Version return Version_String is ("20260619");
+   function Controller_Version return Version_String is ("20260621");
    
    -- Barriers have only been provided where a value could be undefined during
    -- startup. Barriers are not required where the variables are actually

@@ -58,6 +58,9 @@ procedure Test_Controller is
    Fault_LED  : constant GPIO_Pins := Gen2;
 
    task Kick_Watchdog is
+      entry Hold_Low;
+      entry Hold_High;
+      entry Resume;
       entry Stop_Watchdog;
       -- Stop kicking watchdog
    end Kick_Watchdog;
@@ -66,12 +69,26 @@ procedure Test_Controller is
 
       Kick_Interval : constant Time_Span := Milliseconds (500);
       Watchdog_State : Boolean := False;
-      Exit_Now : Boolean := False;
+      Exit_Now, Hold : Boolean := False;
       Next_Time : Time := Clock + Kick_Interval;
 
    begin -- Kick_Watchdog
       while not Exit_Now loop
          select
+            when not Watchdog_State =>
+            accept Hold_Low do
+               Hold := True;
+            end Hold_Low;
+         or
+            when Watchdog_State =>
+            accept Hold_High do
+               Hold := True;
+            end Hold_High;
+         or
+            accept Resume do
+               Hold := False;
+            end Resume;
+         or
             accept Stop_Watchdog do
                Exit_Now := True;
             end Stop_Watchdog;
@@ -82,7 +99,9 @@ procedure Test_Controller is
             else
                Kick_Watchdog_Low;
             end if; -- Watchdog
-            Watchdog_State := not Watchdog_State;
+            if not Hold then
+               Watchdog_State := not Watchdog_State;
+            end if; -- not Hold
             Next_Time := Next_Time + Kick_Interval;
          end select;
       end loop;  -- not Exit_Now
@@ -116,8 +135,12 @@ procedure Test_Controller is
       Put_Line ("A Read Configuration File");
       Put_Line ("B Display Temperature");
       Put_Line ("C Sample A/D for 1 s and Display Temeperature");
+      Put_Line ("D Hold watchdog low");
+      Put_Line ("E Hold watchdog high");
+      Put_Line ("F Resune watchdog (not effective after option 7 used)");
       Put ("Test? ");
-      Get (Test_Requested);
+      Get_Immediate (Test_Requested);
+      New_Line;
       return Test_Requested;
    end Menu;
 
@@ -212,7 +235,7 @@ procedure Test_Controller is
    Configuration : Configurations;
 
 begin -- Test_Controller
-   Put_Line ("Test Controller 20250809");
+   Put_Line ("Test Controller 20260621");
    Initialise_Pins;
    loop -- Process one Menu item
       case Menu is
@@ -286,6 +309,15 @@ begin -- Test_Controller
                       Temperature (Mean (Channel_1_Stats),
                                          Configuration.Panel_Slope,
                                          Configuration.Panel_Offset)'Img);
+         when 'd' | 'D' =>
+            Put_Line ("Holding watchdog output low");
+            Kick_Watchdog.Hold_Low;
+         when 'e' | 'E' =>
+            Put_Line ("Holding watchdog output High");
+            Kick_Watchdog.Hold_High;
+         when 'f' | 'F' =>
+            Put_Line ("Resuming normal watchdog operation");
+            Kick_Watchdog.Resume;
          when others =>
             Put_Line ("Invalid Test Request");
       end case; -- Menu
