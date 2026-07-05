@@ -1,4 +1,7 @@
 with "../Pi_Common/lib_gpiod.gpr";
+with "../Pi_Common/lib_mosquitto.gpr";
+with "../Pi_Common/lib_gnatcoll.gpr";
+with "../Pi_Common/lib_gnatcoll_minimal.gpr";
 
 project Build_All is
    for Languages    use ("Ada", "C");
@@ -11,7 +14,8 @@ project Build_All is
    for Exec_Dir use "./obj";
    
    for Main use ("test_controller.adb", "test_configuration.adb",
-                 "hot_water_controller.adb", "pump_ui.adb", "hw_cost.adb");
+                 "hot_water_controller.adb", "pump_ui.adb", "hw_cost.adb",
+                 "configure_home_automation.adb");
 
    package Compiler is
      for Default_Switches ("Ada") use ("-g", "-gnat2022", "-gnatd_F",
