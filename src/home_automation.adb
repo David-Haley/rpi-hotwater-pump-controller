@@ -1,52 +1,116 @@
--- This package is the implementation of Home_Automation specific to Vera MiOS.
--- Specifically the VeraEdge installation at 19 Bluebell Street
--- Author    : David Haley
--- Created   : 06/04/2019
--- Last Edit : 16/09/2023
--- 20230916 : Local management of exceptions raised in calls to Vera, return
--- failure and log. rather than propagating exception.
--- 20220506 : Now uses unified DJH.Vera
--- 20191010 : BluebellSt domain name changed to 19Bluebell4161.net.au, also new
--- DNS server does not require fully qualified local names.
+--  This package is the implementation of Home_Automation intended for use with
+--  Home Assistant but could work with other automation products that have MQTT
+--  support. It is highly flexible in that the broker, user name, topic and
+--  field name are all specified by a configuration file Home_Automation.json.
+--  The password is obfusscated
 
-with DJH.Vera; use DJH.Vera;
+-- Author    : David Haley
+-- Created   : 05/07/2026
+-- Last Edit : 17/07/2026
+
+with Ada.Real_Time; use Ada.Real_Time;
+with GNATCOLL.JSON; use GNATCOLL.JSON;
+with Common_Configuration; use Common_Configuration;
+with DJH.JSON_Configuration;
+with MQTT_Client; use MQTT_Client;
 with DJH.Events_and_Errors; use DJH.Events_and_Errors;
 
 package body Home_Automation is
 
-   VeraEdge : constant String := "veraedge";
-   Boost_Switch : constant Devices := 23;
+   package Configuration is new
+      DJH.JSON_Configuration (Parameters, Configuration_File, Encrypted);
+   use Configuration;
+
+   Valid_Configuration : Boolean;
+   Request_Handle, Acknowledge_Handle : MQTT_Handle;
+
+   function Acknowledge (Request : in Boolean) return Boolean is
+
+      Rx_String : constant String :=
+        Receive_Blocking (Acknowledge_Handle, Seconds (59), Seconds (58));
+      --  It is assumed that repeated messages will be sent every 60 s until
+      --  the automation responds with the boost state matches the requested
+      --  state.
+
+      Parsed : Read_Result;
+
+   begin -- Acknowledge
+      if Rx_String'Length = 0 then
+         --  Timed out or stale data
+         return False;
+      else
+         Parsed := Read (Rx_String);
+         if Parsed.Success then
+            return Get (Parsed.Value,
+                        Get_Value (Common_Configuration.Acknowledge_Field))
+              = Request;
+         else
+            return False;
+         end if; -- Parsed.Success
+      end if; -- Rx_String'Length = 0
+   end Acknowledge;
 
    function Request_Boost_On return Boolean is
-      -- Turns boost element on via home automation
+      --  Turns boost element on via home automation
 
-      Result : Boolean;
+      Automation_JSON : constant JSON_Value := Create_Object;
 
    begin -- Request_Boost_On
-      begin -- Vera exception block
-         Result := Switch_On (VeraEdge, Boost_Switch);
+      if Valid_Configuration then
+         Set_Field (Automation_JSON, Get_Value (Request_Field), True);
+         Send (Request_Handle, Write (Automation_JSON));
+         return Acknowledge (True);
+      else
+         return False;
+      end if; -- Valid_Configuration
       exception
          when Event : others =>
             Put_Error ("Request_Boost_On", Event);
-            Result := False;
-      end; -- Vera exception block
-      return Result;
+            return False;
    end Request_Boost_On;
 
    function Request_Boost_Off return Boolean is
-      -- Turns boost element off via home automation
+      --  Turns boost element off via home automation
 
-      Result : Boolean;
+      Automation_JSON : constant JSON_Value := Create_Object;
 
    begin -- Request_Boost_Off
-      begin -- Vera exception block
-         Result := Switch_Off (VeraEdge, Boost_Switch);
+      if Valid_Configuration then
+         Set_Field (Automation_JSON, Get_Value (Request_Field), False);
+         Send (Request_Handle, Write (Automation_JSON));
+         return Acknowledge (False);
+      else
+         return False;
+      end if; -- Valid_Configuration
       exception
          when Event : others =>
             Put_Error ("Request_Boost_Off", Event);
-            Result := False;
-      end; -- Vera exception block
-      return Result;
+            return False;
    end Request_Boost_Off;
 
+begin -- Home_Automation
+   Valid_Configuration := Configuration_File_Exists;
+   if Valid_Configuration then
+      Read_Configuration;
+      Connect_Tx (Get_Value (Broker),
+                  Get_Value (User),
+                  Get_Value (Password),
+                  Get_Value (Request_Topic),
+                  Request_Handle,
+                  2,
+                  Keep_Alive_Times'Last);
+      Connect_Rx (Get_Value (Broker),
+                  Get_Value (User),
+                  Get_Value (Password),
+                  Get_Value (Acknowledge_Topic),
+                  Acknowledge_Handle,
+                  2,
+                  Keep_Alive_Times'Last);
+   else
+      raise JSON_Configuration_Error with Configuration_File & " missing";
+   end if; -- Valid_Configuration
+exception
+   when Event: others =>
+      Put_Error ("Home_Automation", Event);
+      Valid_Configuration := False;
 end Home_Automation;
