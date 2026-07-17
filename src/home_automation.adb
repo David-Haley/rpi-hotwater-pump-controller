@@ -6,7 +6,7 @@
 
 -- Author    : David Haley
 -- Created   : 05/07/2026
--- Last Edit : 05/07/2026
+-- Last Edit : 17/07/2026
 
 with Ada.Real_Time; use Ada.Real_Time;
 with GNATCOLL.JSON; use GNATCOLL.JSON;
@@ -27,7 +27,7 @@ package body Home_Automation is
    function Acknowledge (Request : in Boolean) return Boolean is
 
       Rx_String : constant String :=
-        Receive_Blocking (Acknowledge_Handle, Seconds (59), Seconds (120));
+        Receive_Blocking (Acknowledge_Handle, Seconds (59), Seconds (58));
       --  It is assumed that repeated messages will be sent every 60 s until
       --  the automation responds with the boost state matches the requested
       --  state.
@@ -107,7 +107,7 @@ begin -- Home_Automation
                   2,
                   Keep_Alive_Times'Last);
    else
-      raise JSON_Configuration_Error with Configuration_File& " missing";
+      raise JSON_Configuration_Error with Configuration_File & " missing";
    end if; -- Valid_Configuration
 exception
    when Event: others =>

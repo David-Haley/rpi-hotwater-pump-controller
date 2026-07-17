@@ -1,0 +1,25 @@
+{
+  "ACKNOWLEDGE_FIELD": "Boost",
+  "ACKNOWLEDGE_TOPIC": "Hot_Water_Boost_Acknowledge",
+  "BROKER": "Domain-Controller.19Bluebell4161.net.au",
+  "PASSWORD": [
+    120,
+    192,
+    161,
+    192,
+    201,
+    219,
+    196,
+    119,
+    103,
+    113,
+    100,
+    82,
+    100,
+    182,
+    73
+  ],
+  "REQUEST_FIELD": "Boost",
+  "REQUEST_TOPIC": "Hot_Water_Boost_Request",
+  "USER": "Hot_Water_Pump_Controller"
+}

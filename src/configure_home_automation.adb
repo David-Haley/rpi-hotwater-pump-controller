@@ -2,7 +2,7 @@
 
 --  Author    : Devid Haley
 --  Created   : 05/07/2026
---  Last_edit : 05/07/2026
+--  Last_edit : 17/07/2026
 
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Text_IO.Unbounded_IO; use Ada.Text_IO.Unbounded_IO;
@@ -21,7 +21,7 @@ procedure Configure_Home_Automation is
    Value : Unbounded_String;
    
 begin -- Configure_Home_Automation
-   Put_Line (" Configure_Home_Automation version 20260705");
+   Put_Line (" Configure_Home_Automation version 20260717");
    if Configuration_File_Exists then
       Put_Line ("Configuration file" & Configuration_File & " found");
       Put_Line ("For each prompt either enter a new value or enter only to");
@@ -32,6 +32,7 @@ begin -- Configure_Home_Automation
       Put_Line ("Configuration file " & Configuration_File & " not found");
       Put ("Create a new configuration file [y | n] : ");
       Get_Immediate (Response);
+      New_Line;
       if Response = 'y' or Response = 'Y' then
          Put_Line ("Values must be entered for each prompt.");
       end if; -- Response = 'y' or Response = 'Y'
