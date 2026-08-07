@@ -118,10 +118,11 @@ interface package sharing this protocol, not independent implementations.
 
 - `../DJH` — general-purpose utility packages (`DJH.Events_and_Errors`,
   `DJH.Date_and_Time_Strings`, `DJH.JSON_Configuration`, `DJH.Statistics`,
-  `DJH.Parse_CSV`, `DJH.Vera`, `DJH.One_Time`).
+  `DJH.Parse_CSV`).
 - `../Pi_Common` / `../Pi_Common_C` — Raspberry Pi hardware bindings (`RPi_GPIO`,
-  `RPi_Watchdog`, `AD7091R2` ADC driver, `SPI_Interface`, `I2C_Interface`,
-  `DFR0555_Display`, `MQTT_Client`, plus the C GPIO/I2C/SPI drivers).
+  `RPi_Watchdog`, `AD7091R2` ADC driver, `DFR0555_Display`, `MQTT_Client`,
+  `ANSI_Console`, `Linux_Signals`, plus the underlying C GPIO/I2C/SPI drivers used
+  internally by those packages).
 
 When tracing a call into one of these packages, its source lives in the sibling
 repo, not under this repo's `src/`.
