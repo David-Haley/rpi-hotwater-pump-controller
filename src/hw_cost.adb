@@ -1,7 +1,7 @@
 --  Reads the Event_Log file to estimate the running time and cost of using the
 --  boost element. The cost energy usage and cost requires the boost element
---  Watts and Electricity tariff to be read from "HW_Cost_Parameters.csv".
---  To calculate pump running costs, data is read from daily log files and it is 
+--  Watts and Electricity tariff to be read from "HW_Cost_Parameters.json".
+--  To calculate pump running costs, data is read from daily log files and it is
 --  assumed that the feedin (Export_Tariff) applies. Solar energy is estimated
 --  based in the flow read from the flow meter (assumed constant) and the
 --  temperature difference between the panel and tank temperatures and the time
@@ -12,8 +12,10 @@
 
 --  Author    : David Haley
 --  Created   : 11/06/2024
---  Last Edit : 17/06/2026
+--  Last Edit : 08/08/2026
 
+--  20260808 : Parameter file format changed from CSV to JSON, matching
+--  Configuration.json.
 --  20260617 : Compiler warnings removed.
 --  20260417 : Apply trapezium rule to energy calculation.
 --  20260327 : Estimated savings added.
@@ -29,11 +31,12 @@ with Ada.Calendar; use Ada.Calendar;
 with Ada.Calendar.Formatting;
 with Ada.Containers.Ordered_Maps;
 with DJH.Parse_CSV;
+with DJH.JSON_Configuration;
 with DJH.Date_and_Time_Strings; use DJH.Date_and_Time_Strings;
 
 procedure HW_Cost is
 
-   Parameter_File_Name : constant String := "HW_Cost_Parameters.csv";
+   Parameter_File_Name : constant String := "HW_Cost_Parameters.json";
    Event_File_Name : constant String := "Event_Log.txt";
    CSV : constant String := "csv";
 
@@ -73,26 +76,33 @@ procedure HW_Cost is
    use Day_Stores;
    
    procedure Get_Parameters (Parameter_Store : out Parameter_Stores) is
-   
+
       type Cost_Parameters is (Pump_Watts, Max_Boost, Boost_Watts,
         Import_Tariff, Export_Tariff, Mass_Flow);
-        
-      package Parse_Parameters is new DJH.Parse_CSV (Cost_Parameters);
-      use Parse_Parameters;
-         
+
+      function Encrypted (Cost_Parameter : Cost_Parameters) return Boolean is
+        (False);
+      -- All configurations are stored in clear text.
+
+      package Parser is new
+        DJH.JSON_Configuration (Cost_Parameters, Parameter_File_Name,
+                                Encrypted);
+      use Parser;
+
    begin -- Get_Parameters
-      Read_Header (Parameter_File_Name);
-      if not Next_Row then
-         raise Ada.IO_Exceptions.Status_Error with "No cost parameters found";
-      end if; -- not Next_Row
+      if Configuration_File_Exists then
+         Read_Configuration;
+      else
+         raise Ada.IO_Exceptions.Status_Error with
+           Parameter_File_Name & " not found";
+      end if; -- Configuration_File_Exists
       Parameter_Store.Pump_Power := Watts'Value (Get_Value (Pump_Watts));
-      Parameter_Store.Max_Boost := 
+      Parameter_Store.Max_Boost :=
         Ada.Calendar.Formatting.Hour_Number'Value (Get_Value (Max_Boost));
       Parameter_Store.Boost_Power := Watts'Value (Get_Value (Boost_Watts));
       Parameter_Store.Import_Tariff := Cents'Value (Get_Value (Import_Tariff));
       Parameter_Store.Export_Tariff := Cents'Value (Get_Value (Export_Tariff));
       Parameter_Store.Mass_Flow := My_Real'Value (Get_Value (Mass_Flow));
-      Close_CSV;
    end Get_Parameters;
       
    function Trim_Date (Date : in Time) return Time is
@@ -287,7 +297,7 @@ procedure HW_Cost is
    Start_Date, End_Date : Time;
    
 begin -- HW_Cost
-   Put_Line ("HW_Cost version 20260417");
+   Put_Line ("HW_Cost version 20260808");
    if Argument_Count = 2 then
       Start_Date := Get_Date (Argument (1));
       End_Date := Get_Date (Argument (2));
