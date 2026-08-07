@@ -49,14 +49,15 @@ scratch directory with sample `Configuration.json` and `Home_Automation.json`:
 
 ```sh
 cd bin/Test_Area
-../test_configuration      # verifies Configuration.json read/write round-trips
+../test_configuration      # reads Configuration.json and prints every parsed value
 ../test_controller          # ADC/RTD calibration tool, interactive
-../test_home_automation     # exercises the MQTT/Home Assistant interface
+../test_home_automation     # interactive menu that sends real boost on/off
+                             # requests over MQTT using Home_Automation.json
 ```
 
 `hot_water_controller` itself is designed to run as a systemd service without root
 (see `hw-pump.service`) and does not require an explicit start call for the data
-logger or user-interface server — see the `20250507`/`20250502` notes in
+logger or user-interface server — see the `20250507` note in
 `hot_water_controller.adb` about avoiding startup deadlocks.
 
 ## Architecture
@@ -74,12 +75,16 @@ logger or user-interface server — see the `20250507`/`20250502` notes in
   currently unused/unbuilt for this purpose). May eventually be folded directly
   into `hot_water_controller`.
 - **configure_home_automation** — interactive tool that writes
-  `Home_Automation.json`, including basic obfuscation of the MQTT password (see the
-  `PASSWORD` byte array in the JSON — not real encryption, just obfuscation).
+  `Home_Automation.json`, including basic encryption of the MQTT password (see the
+  `PASSWORD` byte array in the JSON — a one-time-pad-style cipher via
+  `DJH.One_Time`, not a standard crypto algorithm).
 - **test_controller** — RTD/ADC calibration tool; aims for <1 ADC count error
   (~25 mC) across 0–100°C, total error budget <1.0°C differential.
-- **test_configuration** / **test_home_automation** — round-trip verification of
-  their respective JSON config files.
+- **test_configuration** — reads `Configuration.json` and prints every parsed value
+  for visual comparison against the file; does not exercise writing.
+- **test_home_automation** — interactive menu that calls `Home_Automation`
+  directly to send real boost-on/off requests over MQTT, independent of the
+  boost-scheduling logic in `boost.ads`.
 - **hw_cost** — offline calculator for electricity cost / solar savings from logged
   data, given a configurable cost/flow-rate and a command-line date range.
 
