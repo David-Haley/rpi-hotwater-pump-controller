@@ -3,8 +3,9 @@
 -- parameters that have been read in.
 -- Author    : David Haley
 -- Created   : 14/10/2017
--- Last Edit : 18/06/2026
+-- Last Edit : 07/08/2026
 
+--  20260807 : Configuration format changed from CSV to JSON.
 --  20260618 : Compiler warnings removed.
 -- 20251008 : Brightness setting (Backlight) added for LCD_Display.
 -- 20250501 : Barrier added to prevent values being read before they are
@@ -24,11 +25,11 @@ with Ada.Directories; use Ada.Directories;
 with Ada.Calendar.Formatting; use Ada.Calendar.Formatting;
 with Ada.Exceptions; use Ada.Exceptions;
 with DJH.Events_and_Errors; use DJH.Events_and_Errors;
-with DJH.Parse_CSV;
+with DJH.JSON_Configuration;
 
 package body Configuration is
 
-   Configuration_File_Name : constant String := "Configuration.csv";
+   Configuration_File_Name : constant String := "Configuration.json";
    
    protected User_Configuration is
 
@@ -194,8 +195,15 @@ package body Configuration is
             Tank_Slope, Tank_Offset, Panel_Slope, Panel_Offset,
             Sanitise_Temperature, Sanitise_Day, Boost_Hour,
             Comfort_Temperature, Comfort_Hour, Backlight);
+
+         function Encrypted (Configuration_Item : Configuration_Items)
+                             return Boolean is (False);
+            -- All configurations are stored in clear text.
             
-         package Parser is new DJH.Parse_CSV (Configuration_Items);
+         package Parser is new
+           DJH.JSON_Configuration (Configuration_Items,
+                                   Configuration_File_Name,
+                                   Encrypted);
          use Parser;
 
          procedure Read_Fields is
@@ -344,9 +352,9 @@ package body Configuration is
          end Read_Fields;
 
       begin -- Read_Configuration
-         begin -- read header
-            if Exists (Configuration_File_Name) then
-               Read_Header (Configuration_File_Name);
+         begin -- read read configuration file
+            if Configuration_File_Exists then
+               Parser.Read_Configuration;
                Put_Event ("Read " & Configuration_File_Name & ' ' & 
                Local_Image (Modification_Time (Configuration_File_Name)));
             else
@@ -358,14 +366,8 @@ package body Configuration is
                raise Configuration_Error with
                  "Configuration file " & Configuration_File_Name & " - " &
                  Exception_Message (E);
-         end; -- read header
-         if Next_Row then
-            Read_Fields;
-         else
-            raise Configuration_Error with
-              "Configuration file " & Configuration_File_Name & " no data row";
-         end if; -- Next_Row
-         Close_CSV;
+         end; -- read read configuration file
+         Read_Fields;
          Defined := True;
       end Read_Configuration;
       
