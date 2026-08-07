@@ -4,8 +4,9 @@
 -- System control is provided by a model 3B Raspberry Pi.
 -- Author    : David Haley
 -- Created   : 02/11/2017
--- Last Edit : 17/06/2026
+-- Last Edit : 07/08/2026
 
+--  20260807 : LCD information changed.
 --  20260617 : Compiler warnings removed
 -- 20251019 : The pump stop logic changed to delay stopping when the
 -- Maximum_Tank_Temperature is exceded. This should prevent short cycling by
@@ -114,7 +115,7 @@ procedure Hot_Water_Controller is
       Old_Time : Ada.Calendar.Time :=
         Ada.Calendar."+" (Ada.Calendar.Clock,
                           Standard.Duration (Loop_Interval));
-      Temp_T, Temp_P : String (1 .. 6);
+      Temp_T, Temp_P : String (1 .. 5);
       Count_String : String (1 .. 4);
 
    begin -- Main_Loop
@@ -226,9 +227,12 @@ procedure Hot_Water_Controller is
             else
                Temperature_IO.Put (Temp_T, Tank, 1, 0);
                Temperature_IO.Put (Temp_P, Panel, 1, 0);
-               --        12345678    901234    56
-               Put_LCD ("Manifold" & Temp_P & " C",
-                        "Cylinder" & Temp_T & " C");
+               --       1 .. 8       9 .. 10 11 .. 15 16
+               Put_LCD (Time_String & " P" & Temp_P & 'C',
+               --                        1 .. 8
+                        Elapsed_Seconds (Pump_Run_Time, Exclude_Days) &
+               --      9 .. 10 11 .. 15 16
+                        " T" & Temp_T & 'C');
             end if; -- Main_Loop_Counter <= Watchdog_Enable_Count
          end select;
       end loop; -- Run_Main_Loop

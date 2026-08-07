@@ -2,8 +2,10 @@
 -- packages.
 -- Author    : David Haley
 -- Created   : 24/10/2017
--- Last Edit : 17/07/2026
+-- Last Edit : 07/08/2026
 
+--  20260807 : Configuration format changed from CSV to JSON and LCD
+--  information changed.
 --  20260717 : Boost element control now using Home Assistant via MQTT.
 --  20260621 : AD_Sample_Pin pulse polarity inverted.
 --  20260619 : Compiler warnings removed.
@@ -91,7 +93,7 @@ package body Global_Data is
    Pump_Relay : constant GPIO_Pins := Gen1;
    Fault_LED : constant GPIO_Pins := Gen2;
 
-   function Controller_Version return Version_String is ("20260717");
+   function Controller_Version return Version_String is ("20260807");
    
    -- Barriers have only been provided where a value could be undefined during
    -- startup. Barriers are not required where the variables are actually
