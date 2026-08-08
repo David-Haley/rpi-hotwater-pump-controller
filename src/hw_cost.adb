@@ -80,9 +80,12 @@ procedure HW_Cost is
       type Cost_Parameters is (Pump_Watts, Max_Boost, Boost_Watts,
         Import_Tariff, Export_Tariff, Mass_Flow);
 
-      function Encrypted (Cost_Parameter : Cost_Parameters) return Boolean is
-        (False);
-      -- All configurations are stored in clear text.
+      pragma Warnings (Off, "gnatwf");
+      function Encrypted
+        (Configuration_Item : Cost_Parameters) return Boolean is
+           (False); -- Waning due to unreferenced formal parameter.
+            --  All configurations are stored in clear text.
+      pragma Warnings (On, "gnatwf");
 
       package Parser is new
         DJH.JSON_Configuration (Cost_Parameters, Parameter_File_Name,
