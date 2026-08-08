@@ -122,8 +122,7 @@ interface package sharing this protocol, not independent implementations.
 ### External shared code (sibling repos, not in this repo)
 
 - `../DJH` — general-purpose utility packages (`DJH.Events_and_Errors`,
-  `DJH.Date_and_Time_Strings`, `DJH.JSON_Configuration`, `DJH.Statistics`,
-  `DJH.Parse_CSV`).
+  `DJH.Date_and_Time_Strings`, `DJH.JSON_Configuration`, `DJH.Statistics`).
 - `../Pi_Common` / `../Pi_Common_C` — Raspberry Pi hardware bindings (`RPi_GPIO`,
   `RPi_Watchdog`, `AD7091R2` ADC driver, `DFR0555_Display`, `MQTT_Client`,
   `ANSI_Console`, `Linux_Signals`, plus the underlying C GPIO/I2C/SPI drivers used

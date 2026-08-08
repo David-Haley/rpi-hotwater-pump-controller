@@ -1,8 +1,9 @@
 -- This is a test program for configuration package
 -- Author    : David Haley
 -- Created   : 14/10/2017
--- Last Edit : 07/08/2026
+-- Last Edit : 08/08/2026
 
+--  20260808 : Compiler style warning removed.
 --  20260807 : Full precision of slope and ofsett displayed, some descriptions
 --  improved.
 -- 20251008 : LCD_Brightness added.
@@ -34,7 +35,7 @@ begin -- Test_Configuration
    New_Line;
    Put_Line ("Minimum Pump Run Time:" & Minimum_Pump_Run_Time'Img);
    Put_Line ("Maximum Hot Delay:" & Maximum_Hot_Delay'Img);
-   Put_line ("Tank Slope:" & Tank_Slope'Img);
+   Put_Line ("Tank Slope:" & Tank_Slope'Img);
    Put_Line ("Tank Offset:" & Tank_Offset'Img);
    Put_Line ("Panel Slope:" & Panel_Slope'Img);
    Put_Line ("Panel Offset:" & Panel_Offset'Img);

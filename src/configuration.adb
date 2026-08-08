@@ -3,8 +3,9 @@
 -- parameters that have been read in.
 -- Author    : David Haley
 -- Created   : 14/10/2017
--- Last Edit : 07/08/2026
+-- Last Edit : 08/08/2026
 
+--  20260808 : Compiler warning removed, correction of a comment.
 --  20260807 : Configuration format changed from CSV to JSON.
 --  20260618 : Compiler warnings removed.
 -- 20251008 : Brightness setting (Backlight) added for LCD_Display.
@@ -196,9 +197,12 @@ package body Configuration is
             Sanitise_Temperature, Sanitise_Day, Boost_Hour,
             Comfort_Temperature, Comfort_Hour, Backlight);
 
+         pragma Warnings (Off, "gnatwf");
          function Encrypted (Configuration_Item : Configuration_Items)
-                             return Boolean is (False);
-            -- All configurations are stored in clear text.
+                             return Boolean is
+            (False); -- Warning due to unreferenced formal parameter.
+            --  All configurations are stored in clear text.
+         pragma Warnings (On, "gnatwf");
             
          package Parser is new
            DJH.JSON_Configuration (Configuration_Items,
@@ -360,7 +364,7 @@ package body Configuration is
             else
                raise Configuration_Error with Configuration_File_Name &
                  "not found";
-            end if; -- Exists (Configuration_File_Name)
+            end if; -- Configuration_File_Exists
          exception
             when E : others =>
                raise Configuration_Error with

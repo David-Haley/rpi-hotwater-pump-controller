@@ -3,8 +3,12 @@
 
 -- Author    : David Haley
 -- Created   : 18/09/2017
--- Last Edit : 19/06/2026
+-- Last Edit : 08/08/2026
 
+--  20260808 : use of JSON configuration file replaces CSV. Note that onlu a
+--  subset of the data will be read from the configuration file. There is
+--  partial duplication of code from configuration.adb, this package is not
+--  used because it depends on DJH.Evemts_and_Errors.
 --  20260619 : Compiler warnings removed, change from Calendar to Real_Time to
 --  match Hot_Water_Controller.
 -- 20250912 : Better value of correction cooeficient used, error reduced to one
@@ -24,7 +28,7 @@ with RPi_GPIO; use RPi_GPIO;
 with AD7091R2;
 with RPi_Watchdog;
 with DJH.Statistics;
-with DJH.Parse_CSV;
+with DJH.JSON_Configuration;
 
 procedure Test_Controller is      
    Sample_Frequency : constant Positive := 574; -- Hz
@@ -206,25 +210,35 @@ procedure Test_Controller is
    end Temperature;
    
    procedure Read_Configuration (Configuration : out Configurations) is
+
+      Configuration_File : constant String := "Configuration.json";
    
       type Configuration_Items is
 		  (Tank_Slope, Tank_Offset, Panel_Slope, Panel_Offset);
+
+      pragma Warnings (Off, "gnatwf");
+      function Encrypted
+        (Configuration_Item : Configuration_Items) return Boolean is
+           (False); -- Warning due to unreferenced formal parameter.
+            --  All configurations are stored in clear text.
+      pragma Warnings (On, "gnatwf");
             
-      package Parser is new DJH.Parse_CSV (Configuration_Items);
+      package Parser is new DJH.JSON_Configuration (Configuration_Items,
+                                                    Configuration_File,
+                                                    Encrypted);
       use Parser;
    
    begin -- Read_Configuration
-      Read_Header ("Configuration.csv");
-      if Next_Row then
+      if Configuration_File_Exists then
+         Parser.Read_Configuration;
 			Configuration.Tank_Slope := Float_15'Value (Get_Value (Tank_Slope));
 			Configuration.Tank_Offset := Float_15'Value (Get_Value (Tank_Offset));
 			Configuration.Panel_Slope := Float_15'Value (Get_Value (Panel_Slope));
 			Configuration.Panel_Offset :=
 			  Float_15'Value (Get_Value (Panel_Offset));
       else
-         Put_Line ("No data row available");
-      end if; -- Next_Row
-      Close_CSV;
+         Put_Line ("File " & Configuration_File & " missing");
+      end if; -- Configuration_File_Exists
    exception
       when E: others =>
          Put_Line ("Error reading configuration file");
