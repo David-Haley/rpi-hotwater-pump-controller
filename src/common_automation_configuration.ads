@@ -3,9 +3,11 @@
 
 --  Author    : Devid Haley
 --  Created   : 05/07/2026
---  Last_edit : 05/07/2026
+--  Last_edit : 08/08/2026
 
-package Common_Configuration is
+--  20260808 : Remamed to Common_Automation_Configuration.
+
+package Common_Automation_Configuration is
 
    type Parameters is (Broker, User, Password, Request_Topic, Request_Field,
      Acknowledge_Topic, Acknowledge_Field);
@@ -14,4 +16,4 @@ package Common_Configuration is
 
    function Encrypted (Parameter : Parameters) return Boolean;
 
-end Common_Configuration;
+end Common_Automation_Configuration;
