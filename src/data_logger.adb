@@ -1,8 +1,10 @@
--- This package provides data logging for the Pump controller
--- Author    : David Haley
--- Created   : 14/10/2017
--- Last Edit : 19/06/2025
+--  This package provides data logging for the Pump controller
+--  Author    : David Haley
+--  Created   : 14/10/2017
+--  Last Edit : 08/08/2025
 
+--  20260808 : Saved_Fault_Table updated when fault table is cleared. File
+--  commit timing logic moved to Global_Data
 --  20260619 : Compiler warnings removed.
 -- 20251018 : Setting of fault table items is now logged. 
 -- 20250506 : Start_Logger removed, to avoid startup deadlock.
@@ -38,8 +40,7 @@ with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Strings; use Ada.Strings;
 with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 with Ada.Directories; use Ada.Directories;
-with Ada.Calendar.Time_Zones; use Ada.Calendar.Time_Zones;
-with Ada.Calendar.Formatting; use Ada.Calendar.Formatting;
+with Ada.Calendar; use Ada.Calendar;
 with DJH.Date_and_Time_Strings; use DJH.Date_and_Time_Strings;
 with DJH.Events_and_Errors; use DJH.Events_and_Errors;
 with Pump_Controller_Types; use Pump_Controller_Types;
@@ -55,74 +56,6 @@ package body Data_Logger is
    Logging_File : File_Type;
    Log_Interval : constant Day_Duration := 60.0;
    -- create a log entry at 1 minute interevals
-   File_Commit_Interval : constant Duration := 3600.0;
-   -- Commit logging files once per hour
-   
-   Saved_Fault_Table : Fault_Tables := [others => False];
-   -- Assumed to start fault free.
-
-   function On_The_Hour (T : in Time) return Time is
-   
-      -- Effectively rounds T down such that minutes and seconds are zero
-
-      Year : Year_Number;
-      Month : Month_Number;
-      Day : Day_Number;
-      This_Hour : Hour_Number;
-      Minute : Minute_Number;
-      Second : Second_Number;
-      Sub_Second : Second_Duration;
-      Leap_Second : Boolean;
-
-   begin -- On_The_Hour
-      Split (T, Year, Month, Day,
-             This_Hour, Minute, Second, Sub_Second,
-             Leap_Second, UTC_Time_Offset (T));
-      return Time_Of (Year, Month, Day,
-                      This_Hour, 0, 0, 0.0,
-                      Leap_Second, UTC_Time_Offset (T));
-   end On_The_Hour;
-
-   protected type File_Commit_Times is
-
-      procedure Set_Next_File_Commit;
-      -- Sets time for next file commit
-
-      function Get_Next_File_Commit return Time;
-      -- Gets time of next file commit
-
-   private
-      File_Commit_Time : Time := On_The_Hour (Clock) + File_Commit_Interval;
-      -- Once per hour on the hour, first commit could beless than one hour
-      -- after start
-   end File_Commit_Times;
-
-   protected body File_Commit_Times is
-
-      procedure Set_Next_File_Commit is
-         -- Sets time for next file commit
-
-      begin -- Set_Next_File_Commit
-         File_Commit_Time := File_Commit_Time +File_Commit_Interval;
-      end Set_Next_File_Commit;
-
-      function Get_Next_File_Commit return Time is
-         -- Gets time of next file commit
-
-      begin -- Get_Next_File_Commit
-         return File_Commit_Time;
-      end Get_Next_File_Commit;
-
-   end File_Commit_Times;
-
-   Logging_File_Commit_Time : File_Commit_Times;
-
-   function Read_File_Commit_Time return Time is
-      -- Returns time of next file commit, that is, Flush (xx)
-
-   begin -- Read_File_Commit_Time
-      return Logging_File_Commit_Time.Get_Next_File_Commit;
-   end Read_File_Commit_Time;
 
    function Read_Accumulated_Hours return Accumulated_Times is
       -- This function reads the existing accumulated time file if it exists. If
@@ -230,18 +163,12 @@ package body Data_Logger is
    end Update_Accumulated_Time;
 
    function Logging_Path (This_Time : Time) return String is
+      (Reverse_Date_String (This_Time) (1..4));
       -- returns "YYYY" representing the current year
 
-   begin -- Logging_Path
-      return Reverse_Date_String (This_Time) (1..4);
-   end Logging_Path;
-
    function Logging_File_Name (This_Time : Time) return String is
+      ('/' & Reverse_Date_String (This_Time) & ".csv");
       -- returns "YYYYMMDD.csv" where YYYYMMDD represents the current date
-
-   begin -- Logging_File_Name
-      return '/' & Reverse_Date_String (This_Time) & ".csv";
-   end Logging_File_Name;
 
    procedure Open_Log_File (Logging_File : in out File_Type;
                             This_Time : in Time) is
@@ -340,6 +267,8 @@ package body Data_Logger is
       Next_Time, Previous_Time : Time;
       Previous_Pump_Time, Logger_Pump_Time : Accumulated_Times;
       Current_Fault_Table : Fault_Tables;
+      Saved_Fault_Table : Fault_Tables := [others => False];
+      -- Assumed to start fault free.
 
    begin -- Logger
       Write_Accumulated_Time (Read_Accumulated_Hours);
@@ -370,7 +299,7 @@ package body Data_Logger is
                Next_Time := Next_Time + Log_Interval;
             end if; -- Is_Next_Day (Previous_Time, Next_Time)
             Put_Log_Entry (Logging_File, Logger_Pump_Time);
-            if Clock >= Logging_File_Commit_Time.Get_Next_File_Commit then
+            if Clock >= Get_Next_File_Commit_Time then
                Flush (Logging_File);
                Logger_Pump_Time := Accumulated_Pump_Run_Time;
                -- Accumulated_Pump_Run_Time is copied to a local variable to
@@ -380,29 +309,25 @@ package body Data_Logger is
                   Update_Accumulated_Time (Logger_Pump_Time);
                   Previous_Pump_Time := Logger_Pump_Time;
                end if; -- Logger_Pump_Time > Previous_Pump_Time
-               Logging_File_Commit_Time.Set_Next_File_Commit;
-            end if; -- Clock >= File_Commit_Time
+               Set_Next_File_Commit_Time;
+            end if; -- Clock >= Get_Next_File_Commit_Time
             Current_Fault_Table := Read_Fault_Table;
             begin -- Fault logging exception block
                -- Single shot reporting of faults to the event log.
                if Current_Fault_Table (Accumulated_Time_File) and not
                  Saved_Fault_Table (Accumulated_Time_File) then
-                  Saved_Fault_Table (Accumulated_Time_File) := True;
                   Put_Event ("Accumulated pump time fault set");
                end if; -- Current_Fault_Table (Accumulated_Time_File) and not...
                if Current_Fault_Table (Log_File) and not
                  Saved_Fault_Table (Log_File) then
-                  Saved_Fault_Table (Log_File) := True;
                   Put_Event ("Log file fault set");
                end if; -- Current_Fault_Table (Log_File) and not ...
                if Current_Fault_Table (Tank_Temperature) and not
                  Saved_Fault_Table (Tank_Temperature) then
-                  Saved_Fault_Table (Tank_Temperature) := True;
                   Put_Event ("Tank over temperature fault set");
                end if; -- Current_Fault_Table (Tank_Temperature) and not ...
                if Current_Fault_Table (Boost_Failure) and not
                  Saved_Fault_Table (Boost_Failure) then
-                  Saved_Fault_Table (Boost_Failure) := True;
                   Put_Event ("Automatic Boost fault set");
                end if; -- Current_Fault_Table (Boost_Failure) and not
             exception
@@ -412,6 +337,7 @@ package body Data_Logger is
                   -- caused a fault to be set and any further attempts to log
                   -- could raise further exceptions.
             end; -- Fault logging exception block
+            Saved_Fault_Table := Current_Fault_Table;
          end select;
       end loop; -- Run_Logger
       Close (Logging_File);

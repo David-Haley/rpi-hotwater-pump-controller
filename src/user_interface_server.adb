@@ -39,7 +39,6 @@ with DJH.Events_and_Errors; use DJH.Events_and_Errors;
 with Pump_Controller_Types; use Pump_Controller_Types;
 with Global_Data; use Global_Data;
 with Shared_User_Interface; use Shared_User_Interface;
-with Data_Logger; use Data_Logger;
 with Boost; use Boost;
 
 package body User_Interface_Server is
@@ -71,7 +70,8 @@ package body User_Interface_Server is
          if Last > 0 and then
            Interface_Version = Request_Record.User_Interface_Version then
             declare -- scope of TX_Buffer
-               Status : Status_Records (Request_Record.Request);
+               Status : Shared_User_Interface.Status_Records
+                 (Request_Record.Request);
                TX_Buffer : Response_Buffers;
                for TX_Buffer'Address use Status'Address;
                pragma Import (Ada, TX_Buffer);
@@ -88,7 +88,7 @@ package body User_Interface_Server is
                   Status.Pump_Run_Time := Pump_Run_Time;
                   Status.Accumulated_Pump_Run_Time := Accumulated_Pump_Run_Time;
                   Status.Controller_Up_Time := Up_Time;
-                  Status.Next_File_Commit_Time := Read_File_Commit_Time;
+                  Status.Next_File_Commit_Time := Get_Next_File_Commit_Time;
                   Status.Next_Boost_Time := Next_Boost;
                   Status.Fault_Table := Read_Fault_Table;
                when Clear_Fault_Table =>
