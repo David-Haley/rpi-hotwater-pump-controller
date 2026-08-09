@@ -1,8 +1,9 @@
--- This package provides server component for the user interface.
--- Author    : David Haley
--- Created   : 29/10/2017
--- Last Edit : 19/06/2026
+--  This package provides server component for the user interface.
+--  Author    : David Haley
+--  Created   : 29/10/2017
+--  Last Edit : 09/08/2026
 
+--  20260809 : MQTT Publisher and integrated web server.
 --  20260619 : Compiler warnings removed.
 -- 20250507 : Start_User_Interface remoced to reduce potential for startup
 -- deadlock.
@@ -32,115 +33,162 @@
 -- versions;
 -- 20171107 Converted to UDP
 
-with Ada.Streams; use Ada.Streams;
 with Ada.Calendar; use Ada.Calendar;
-with GNAT.Sockets; use GNAT.Sockets;
+with Ada.Calendar.Time_Zones; use Ada.Calendar.Time_Zones;
+with Ada.Calendar.Formatting; use Ada.Calendar.Formatting;
+with GNATCOLL.JSON; use GNATCOLL.JSON;
+with MQTT_Client; use MQTT_Client;
+with DJH.JSON_Configuration;
+with DJH.Date_and_Time_Strings; use DJH.Date_and_Time_Strings;
 with DJH.Events_and_Errors; use DJH.Events_and_Errors;
 with Pump_Controller_Types; use Pump_Controller_Types;
-with Global_Data; use Global_Data;
-with Shared_User_Interface; use Shared_User_Interface;
-with Boost; use Boost;
+with Common_Status_Configuration; use Common_Status_Configuration;
 
 package body User_Interface_Server is
 
+   package Parser is new
+   DJH.JSON_Configuration (Parameters, Configuration_File, Encrypted);
+   use Parser;
+
+   Publish_Interval : constant Duration := 1.0;
+
    task body UI_Server is
 
-      Run_User_Interface : Boolean := True;
-      RX_Socket, TX_Socket : Socket_Type;
-      Server_Address : constant Sock_Addr_Type := (Family => Family_Inet,
-                                                   Addr => Any_Inet_Addr,
-                                                   Port => Server_Port);
+      procedure Publish (Status_Record : in Status_Records;
+                         Publish_Handle : in MQTT_Handle) is
 
-      procedure Process_Requests is
+         Celsius : constant Character := 'C';
+         Good : constant String := "Good";
+         Bad : constant String := "Bad";
+         Status_JSON : constant JSON_Value := Create_Object;
+         Temp_String : String (1 .. 5);
+         Difference : Temperature_Differences;
 
-         Request_Record : Request_Records;
-         RX_Buffer : Request_Buffers;
-         for RX_Buffer'Address use Request_Record'Address;
-         pragma Import (Ada, RX_Buffer);
-         Last : Stream_Element_Offset;
-         Client_Address : Sock_Addr_Type;
-         Boost_Time : Boost_Times;
-
-      begin -- Process_Requests
-         begin -- Rx exception block
-            Receive_Socket (RX_Socket, RX_Buffer, Last, Client_Address);
-         exception when Socket_Error =>
-            null; -- an exception is raised if there is a receive timeout
-         end; -- Rx exception block
-         if Last > 0 and then
-           Interface_Version = Request_Record.User_Interface_Version then
-            declare -- scope of TX_Buffer
-               Status : Shared_User_Interface.Status_Records
-                 (Request_Record.Request);
-               TX_Buffer : Response_Buffers;
-               for TX_Buffer'Address use Status'Address;
-               pragma Import (Ada, TX_Buffer);
-            begin -- scope of TX_Buffer
-               case Request_Record.Request is
-               when Get_Status =>
-                  Status.Controller_Version := Controller_Version;
-                  Status.Controller_Time := Clock;
-                  Status.Tank_Temperature := Tank_Temperature;
-                  Status.Panel_Temperature := Panel_Temperature;
-                  Status.Pump_Run := Pump_Run;
-                  Status.Is_Comfortable := Is_Comfortable;
-                  Status.Average_Difference := Average_Difference;
-                  Status.Pump_Run_Time := Pump_Run_Time;
-                  Status.Accumulated_Pump_Run_Time := Accumulated_Pump_Run_Time;
-                  Status.Controller_Up_Time := Up_Time;
-                  Status.Next_File_Commit_Time := Get_Next_File_Commit_Time;
-                  Status.Next_Boost_Time := Next_Boost;
-                  Status.Fault_Table := Read_Fault_Table;
-               when Clear_Fault_Table =>
-                  Put_Event ("Fault Table Cleared");
-                  for Fault_Index in Fault_Types loop
-                     Clear_Fault (Fault_Index);
-                  end loop; --Fault_Index in Fault_Types
-               when Manual_Boost =>
-                  Status.User_Input := Request_Record.User_Input;
-                  if Request_Record.User_Input then
-                     Boost_Time := Next_Boost;
-                     Request_Record.Next_Boost_Time.Next_Boost_Time :=
-                       Next_Boost_Time (Request_Record.Next_Boost_Time.
-                       Next_Boost_Time);
-                     if Request_Record.Next_Boost_Time.Next_Boost_Time <=
-                       Boost_Time.Mandatory_Boost_Time then
-                        Boost_Time.Next_Boost_Time :=
-                          Request_Record.Next_Boost_Time.Next_Boost_Time;
-                        Write_Next_Boost_Time (Boost_Time);
-                     end if; -- Request_Record.Next_Boost_Time.Next_Boost_Time 
-                  end if; -- Request_Record.User_Input
-               when others =>
-                  null; -- Acknowledged no additional data sent
-               end case; -- Request_Record.Request
-               Send_Socket (TX_Socket, TX_Buffer, Last, Client_Address);
-            end; -- scope of TX_Buffer
-         elsif Last > 0 then
-            Put_Event ("Request received from wrong version UI: " &
-                         Request_Record.User_Interface_Version);
-         end if; -- Last > 0 and then ...
-      end Process_Requests;
-
-   begin -- UI_Server
-      Create_Socket (RX_Socket, Family_Inet, Socket_Datagram);
-      Set_Socket_Option (RX_Socket, Socket_Level, (Receive_Timeout, 3.0));
-      -- Allows server loop to potentially accept Stop regularly.
-      Bind_Socket (RX_Socket, Server_Address);
-      Create_Socket (TX_Socket, Family_Inet, Socket_Datagram);
-      while Run_User_Interface loop
-         select
-            accept Stop do
-               Run_User_Interface := False;
-            end Stop;
+      begin -- Publish
+         Set_Field (Status_JSON, "Controller_Version",
+                    Status_Record. Controller_Version);
+         Set_Field (Status_JSON,"Controller_Time",
+                    Time_String (Status_Record.Controller_Time));
+         Set_Field (Status_JSON,"Controller_Up_Time",
+                    Elapsed_Seconds (Status_Record.Controller_Up_Time,
+                                     Include_Days));
+         Temperature_IO.Put (Temp_String, Status_Record.Panel_Temperature,
+                             1, 0);
+         Set_Field (Status_JSON, "Panel_Temperature", Temp_String & Celsius);
+         Temperature_IO.Put (Temp_String, Status_Record.Tank_Temperature,
+                             1, 0);
+         Set_Field (Status_JSON, "Tank_Temperature", Temp_String & Celsius);
+         Difference := Status_Record.Panel_Temperature -
+           Status_Record.Tank_Temperature;
+         Temperature_Difference_IO.Put (Temp_String, Difference, 1, 0);
+         Set_Field (Status_JSON, "Temperature_Difference",
+                    Temp_String & Celsius);
+         Temperature_Difference_IO.Put (Temp_String,
+                                        Status_Record.Average_Difference, 1, 0);
+         Set_Field (Status_JSON, "Average_Difference", Temp_String & Celsius);
+         if Status_Record.Is_Comfortable then
+            Set_Field (Status_JSON, "Is_Comfortable", "Comfortable");
          else
-            Process_Requests;
-         end select;
+            Set_Field (Status_JSON, "Is_Comfortable", "Cold");
+         end if; -- Status_Record.Is_Comfortable
+         if Status_Record.Pump_Run then
+            Set_Field (Status_JSON,"Pump_Run", "Runing");
+         else
+            Set_Field (Status_JSON,"Pump_Run", "Stoped");
+         end if; -- Status_Record.Pump_Run
+         Set_Field (Status_JSON,"Pump_Run_Time",
+                    Elapsed_Seconds (Status_Record.Pump_Run_Time,
+                                     Exclude_Days));
+         Set_Field (Status_JSON,"Previous_Run_Duration",
+                    Elapsed_Seconds (Status_Record.Previous_Run_Duration,
+                                     Exclude_Days));
+         Set_Field (Status_JSON,"Previous_Run_Time",
+                    Time_String (Status_Record.Previous_Run_Time));
+         Set_Field (Status_JSON,"Accumulated_Pump_Run_Time",
+                    Elapsed_Seconds (Status_Record.Accumulated_Pump_Run_Time,
+                                     Hours_More_Than_24));
+         Set_Field (Status_JSON,"Next_File_Commit_Time",
+                    Time_String (Status_Record.Next_File_Commit_Time));
+         Set_Field (Status_JSON,"Next_Boost_Time",
+                    Image (Status_Record.Next_Boost_Time.Next_Boost_Time, False,
+                    UTC_Time_Offset));
+         if Status_Record.Fault_Table (Accumulated_Time_File) then
+            Set_Field (Status_JSON,"Pump_Log", Bad);
+         else
+            Set_Field (Status_JSON,"Pump_Log", Good);
+         end if; -- Status_Record.Fault_Table (Accumulated_Time_File)
+         if Status_Record.Fault_Table (Log_File) then
+            Set_Field (Status_JSON,"Data_Log", Bad);
+         else
+            Set_Field (Status_JSON,"Data_Log", Good);
+         end if; -- Status_Record.Fault_Table (Log_File)
+         if Status_Record.Fault_Table (Tank_Temperature) then
+            Set_Field (Status_JSON,"Tank_Temperature", Bad);
+         else
+            Set_Field (Status_JSON,"Tank_Temperature", Good);
+         end if; -- Status_Record.Fault_Table (Tank_Temperature)
+         if Status_Record.Fault_Table (Boost_Failure) then
+            Set_Field (Status_JSON,"Auto_Boost", Bad);
+         else
+            Set_Field (Status_JSON,"Auto_Boost", Good);
+         end if; -- Status_Record.Fault_Table (Boost_Failure)
+         Send (Publish_Handle, Write (Status_JSON));
+      end Publish;
+
+      Run_User_Interface : Boolean := True;
+      Status_Record : Status_Records;
+      Publish_Handle : MQTT_Handle;
+      Connect_Count : Natural := 0;
+      Next_Time : Time := Clock;
+
+   begin -- UI_Serve
+      if Configuration_File_Exists then
+         Read_Configuration;
+         Connect_Tx (Get_Value (Broker),
+                     Get_Value (User),
+                     Get_Value (Password),
+                     Get_Value (Status_Topic),
+                     Publish_Handle);
+      else
+         raise JSON_Configuration_Error with Configuration_File & " missing";
+      end if; -- Valid_Configuration
+      loop -- Until Connected 
+         delay 0.1;
+         exit when Is_Connected_Tx (Publish_Handle) or Connect_Count > 100;
+         -- Allows up to 10s to connect
+         Connect_Count := @ + 1;
+      end loop; -- Until Connected
+      if not Is_Connected_Tx (Publish_Handle) then
+         raise MQTT_Error with "UIServer connection timed out";
+      end if; -- not Is_Connected_Tx (Publish_Handle)
+      Status_Record := Get_Status;
+      while Run_User_Interface loop
+         begin -- UI_Server exception block
+            select
+               accept Get_Status (Status : out Status_Records) do
+                  Status := Status_Record;
+               end Get_Status;
+               accept Stop do
+                  Run_User_Interface := False;
+               end Stop;
+            or
+               --  Only intended to run at approximately intervals, some
+               --  randomness in delay should reduce potential conflict with
+               --  essential controller processes.
+               delay until Next_Time;
+               Status_Record := Get_Status;
+               Publish (Status_Record, Publish_Handle);
+               Next_Time := Clock + Publish_Interval;
+            end select;
+         exception -- UI_Server exception block
+            when Event: others =>
+               Put_Error ("UI_Server loop", Event); 
+         end; -- UI_Server exception block
       end loop; -- Run_User_Interface
-      Close_Socket (RX_Socket);
-      Close_Socket (TX_Socket);
-      exception
-         when Event: others =>
-            Put_Error ("UI_Server", Event); 
+      Disconnect (Publish_Handle);
+   exception -- UI_Server exception block
+      when Event: others =>
+         Put_Error ("UI_Server", Event);
    end UI_Server;
 
 end User_Interface_Server;
