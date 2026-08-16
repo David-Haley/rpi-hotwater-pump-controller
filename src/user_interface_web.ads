@@ -1,21 +1,22 @@
--- This package provides a web based client component for a distributed user
--- interface. It provides equivalent functionality to User_Interface_Client
--- (status display and command entry) but rendered as HTML pages served over
--- HTTP rather than as an ANSI terminal display.
+-- This package provides the web based user interface. It is served directly
+-- by hot_water_controller: status is read via User_Interface_Server.UI_Server
+-- and commands (clear faults, manual boost) are issued directly to
+-- Global_Data. There is no separate wire protocol or standalone client
+-- program any more.
 -- Author    : David Haley
 -- Created   : 06/08/2026
+-- Last Edit : 16/08/2026
 
-with GNAT.Sockets;
-
-generic
-
-   Controller_Name : String;
+-- 20260816 : De-genericised and integrated directly into
+-- hot_water_controller; Run_UI replaced by the Web_UI task starting and
+-- stopping itself, matching User_Interface_Server / Data_Logger.
 
 package User_Interface_Web is
 
-   procedure Run_UI (HTTP_Port : in GNAT.Sockets.Port_Type := 8080);
-   -- Starts the HTTP server on HTTP_Port and services browser requests,
-   -- relaying status and command requests to the controller via the same
-   -- protocol used by User_Interface_Client. Does not return.
+   task Web_UI is
+      entry Stop;
+   end Web_UI;
+
+   procedure Stop_Web_UI renames Web_UI.Stop;
 
 end User_Interface_Web;

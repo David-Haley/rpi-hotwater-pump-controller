@@ -1,8 +1,10 @@
 --  This package provides server component for the user interface.
 --  Author    : David Haley
 --  Created   : 29/10/2017
---  Last Edit : 09/08/2026
+--  Last Edit : 16/08/2026
 
+--  20260816 : Termination issue fixed (assisted by Claude) missing "or"
+--  between accept blocks in UI_Server.
 --  20260809 : MQTT Publisher and integrated web server.
 --  20260619 : Compiler warnings removed.
 -- 20250507 : Start_User_Interface remoced to reduce potential for startup
@@ -168,6 +170,7 @@ package body User_Interface_Server is
                accept Get_Status (Status : out Status_Records) do
                   Status := Status_Record;
                end Get_Status;
+            or
                accept Stop do
                   Run_User_Interface := False;
                end Stop;

@@ -10,18 +10,15 @@ The controller is purpose built hardware which provides analogue signal conditio
 
 ### hot_water_controller
 
-This program does the actual control of the pump, provides data logging, event and error reporting. It has been designed to run as a systemd service and does not require root privilege.
+This program does the actual control of the pump, provides data logging, event and error reporting. It has been designed to run as a systemd service and does not require root privilege. It also serves the user interface directly: a web server on port 8080 providing status display and command entry (clear fault table, manual boost), reading and writing the controller's state in-process rather than over a network protocol.
 
 ### configure_home_automation
 
-This produces the JSON configuration required for hot_water_controller to access the MQTT broker including basic encryption of the password.
+This produces the JSON configuration file required for hot_water_controller to access the MQTT broker, for the purpose of controlling the boost element, via home automation. The broker host, user name and topic are configurable. The user password is obfuscated.
 
-### pump_ui
+### configure_user_interface
 
-Provides an ANSI terminal mimic and user interface. It communicates with hot_water_controller using UDP messages. This will be deprecated with the functionality replaced by pump_web, which may in the long term be incorporated into hot_water_controller.
-
-### pump_web
-Provides a user interface via a web server at present runs as a separate program using the same UDP interface as pump_ui. As a future step it may replace pump_ui and be directly incorporated into hot_water_controller.
+This produces the JSON configuration file required for hot_water_controller to access the MQTT broker to publish the controller status. The broker host, user name and topic are configurable. The user password is obfuscated.
 
 ### test_controller
 

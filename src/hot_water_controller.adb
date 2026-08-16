@@ -4,8 +4,11 @@
 -- System control is provided by a model 3B Raspberry Pi.
 -- Author    : David Haley
 -- Created   : 02/11/2017
--- Last Edit : 07/08/2026
+-- Last Edit : 16/08/2026
 
+--  20260816 : Web UI integrated directly into the controller; shutdown now
+--  also stops Web_UI, with the same delay/abort fallback used for the other
+--  subsystems.
 --  20260807 : LCD information changed.
 --  20260617 : Compiler warnings removed
 -- 20251019 : The pump stop logic changed to delay stopping when the
@@ -66,6 +69,7 @@ with Global_Data; use Global_Data;
 with Configuration; use Configuration;
 with Temperature; use Temperature;
 with User_Interface_Server; use User_Interface_Server;
+with User_Interface_Web; use User_Interface_Web;
 with Data_Logger; use Data_Logger;
 with Boost; use Boost;
 with Local_Display; use Local_Display;
@@ -135,6 +139,7 @@ procedure Hot_Water_Controller is
                   Stop_Boost;
                   Stop_Logger;
                   Stop_User_Interface;
+                  Stop_Web_UI;
                   Stop_Events;
                   -- Turn off fault LED
                   for F in Fault_Types loop
@@ -165,6 +170,12 @@ procedure Hot_Water_Controller is
                or
                   delay 3.3;
                   abort UI_Server;
+               end select;
+               select
+                  Stop_Web_UI;
+               or
+                  delay 3.3;
+                  abort Web_UI;
                end select;
                Disable_Watchdog;
                select

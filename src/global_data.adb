@@ -4,6 +4,9 @@
 --  Created   : 24/10/2017
 --  Last Edit : 08/08/2026
 
+--  20260816 : Web server integrated into hot_water_controller. correction to
+--  Get_Status to return correct Controller_Up_Time and
+--  Accumulated_Pump_Run_Time.
 --  202260808 : Declaration of Status_Records moved here and Get_Status added.
 --  The intention is to minimise overhead of serving data to the user interface.
 --  20260807 : Configuration format changed from CSV to JSON and LCD
@@ -100,7 +103,7 @@ package body Global_Data is
    Pump_Relay : constant GPIO_Pins := Gen1;
    Fault_LED : constant GPIO_Pins := Gen2;
 
-   function Controller_Version return Version_String is ("20260807");
+   function Controller_Version return Version_String is ("20260816");
    
    -- Barriers have only been provided where a value could be undefined during
    -- startup. Barriers are not required where the variables are actually
@@ -452,16 +455,17 @@ package body Global_Data is
    begin -- Get_Status
       Result.Controller_Version := Controller_Version;
       Result.Controller_Time := Clock;
+      Result.Controller_Up_Time := Controller_State.Up_Time;
       Controller_State.Panel_Temperature (Result.Panel_Temperature);
       Controller_State.Tank_Temperature (Result.Tank_Temperature);
-      Result.Pump_Run := Controller_State.Pump_Run;
+      Controller_State.Average_Difference (Result.Average_Difference);
       Result.Is_Comfortable := Controller_State.Is_Comfortable;
-      Controller_State.Accumulated_Pump_Run_Time (Result.Pump_Run_Time);
+      Result.Pump_Run := Controller_State.Pump_Run;
+      Result.Pump_Run_Time := Controller_State.Pump_Run_Time;
+      Controller_State.Accumulated_Pump_Run_Time
+        (Result.Accumulated_Pump_Run_Time);
       Controller_State.Get_Previous_Run (Result.Previous_Run_Duration,
                                          Result.Previous_Run_Time);
-      Controller_State.Average_Difference (Result.Average_Difference);
-      Result.Accumulated_Pump_Run_Time := Accumulated_Pump_Run_Time;
-      Controller_State.Accumulated_Pump_Run_Time (Result.Controller_Up_Time);
       Result.Next_File_Commit_Time :=
         File_Commit_Time.Get_Next_File_Commit_Time;
       Controller_State.Next_Boost (Result.Next_Boost_Time);
