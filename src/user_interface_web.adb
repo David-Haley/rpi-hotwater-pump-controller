@@ -9,8 +9,9 @@
 -- until the controller is stopped via systemd/ctrl c.
 -- Author    : David Haley
 -- Created   : 06/08/2026
--- Last Edit : 16/08/2026
+-- Last Edit : 19/08/2026
 
+-- 20260819 : Corrections to command button operations.
 -- 20260816 : De-genericised and integrated directly into
 -- hot_water_controller. Status is read via
 -- User_Interface_Server.UI_Server.Get_Status and commands are issued
@@ -90,6 +91,7 @@ package body User_Interface_Web is
       for F in Fault_Types loop
          Global_Data.Clear_Fault (F);
       end loop; -- F in Fault_Types
+      Put_Event ("Fault table cleared");
       return True;
    exception
       when others =>
@@ -166,10 +168,16 @@ package body User_Interface_Web is
       -- (e.g. Clear Fault Table) is open, dismissing the dialog before the
       -- user can answer it. A setTimeout-driven reload queues behind the
       -- same JS event loop that confirm() blocks, so it waits until the
-      -- dialog is answered.
+      -- dialog is answered. If the delay elapsed while the dialog was open,
+      -- the reload becomes due the instant the user answers it, and can
+      -- then race the browser's own navigation to the form's POST target,
+      -- aborting the submission; Auto_Refresh_Suspended, set by the form's
+      -- onsubmit handler once the user confirms, guards against that.
       Refresh_Tag : constant String :=
         (if Refresh_Seconds > 0 then
-           "<script>setTimeout(function(){location.reload();}," &
+           "<script>var Auto_Refresh_Suspended=false;" &
+             "setTimeout(function(){if(!Auto_Refresh_Suspended)" &
+             "location.reload();}," &
              Trim (Natural'Image (Refresh_Seconds * 1000), Left) &
              ");</script>"
          else "");
@@ -272,8 +280,9 @@ package body User_Interface_Web is
       end if; -- not Success
       Append (Result, "<h2>Commands</h2><div class=""commands"">");
       Append (Result, "<form method=""post"" action=""/clear_fault_table""" &
-                " onsubmit=""return confirm('Clear fault table?');"">" &
-                "<button type=""submit"">Clear Fault Table</button></form>");
+                " onsubmit=""if(confirm('Clear fault table?'))" &
+                "{Auto_Refresh_Suspended=true;return true;}return false;""" &
+                "><button type=""submit"">Clear Fault Table</button></form>");
       Append (Result, "<a class=""button"" href=""/manual_boost"">" &
                 "Manual Boost</a>");
       Append (Result, "</div>");

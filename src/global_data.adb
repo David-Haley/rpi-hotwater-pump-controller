@@ -2,9 +2,9 @@
 --  packages.
 --  Author    : David Haley
 --  Created   : 24/10/2017
---  Last Edit : 08/08/2026
+--  Last Edit : 19/08/2026
 
---  20260816 : Web server integrated into hot_water_controller. correction to
+--  20260819 : Web server integrated into hot_water_controller. correction to
 --  Get_Status to return correct Controller_Up_Time and
 --  Accumulated_Pump_Run_Time.
 --  202260808 : Declaration of Status_Records moved here and Get_Status added.
@@ -103,7 +103,7 @@ package body Global_Data is
    Pump_Relay : constant GPIO_Pins := Gen1;
    Fault_LED : constant GPIO_Pins := Gen2;
 
-   function Controller_Version return Version_String is ("20260816");
+   function Controller_Version return Version_String is ("20260819");
    
    -- Barriers have only been provided where a value could be undefined during
    -- startup. Barriers are not required where the variables are actually
