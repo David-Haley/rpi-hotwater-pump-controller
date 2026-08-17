@@ -161,10 +161,17 @@ package body User_Interface_Web is
    function Page_Header (Title : in String; Refresh_Seconds : in Natural := 0)
                          return String is
 
+      -- A meta refresh runs on the browser's navigation timer, independent
+      -- of JavaScript, so it fires even while a blocking confirm() dialog
+      -- (e.g. Clear Fault Table) is open, dismissing the dialog before the
+      -- user can answer it. A setTimeout-driven reload queues behind the
+      -- same JS event loop that confirm() blocks, so it waits until the
+      -- dialog is answered.
       Refresh_Tag : constant String :=
         (if Refresh_Seconds > 0 then
-           "<meta http-equiv=""refresh"" content=""" &
-             Trim (Refresh_Seconds'Image, Left) & """>"
+           "<script>setTimeout(function(){location.reload();}," &
+             Trim (Natural'Image (Refresh_Seconds * 1000), Left) &
+             ");</script>"
          else "");
 
    begin -- Page_Header
