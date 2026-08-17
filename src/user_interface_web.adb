@@ -30,6 +30,7 @@ with Ada.Calendar.Time_Zones; use Ada.Calendar.Time_Zones;
 with GNAT.Sockets; use GNAT.Sockets;
 with Machine_Properties;
 with Pump_Controller_Types; use Pump_Controller_Types;
+with Configuration; use Configuration;
 with Global_Data; use Global_Data;
 with User_Interface_Server; use User_Interface_Server;
 with DJH.Date_and_Time_Strings; use DJH.Date_and_Time_Strings;
@@ -407,8 +408,9 @@ package body User_Interface_Web is
             Requested_Day : constant Day_Number :=
               Day_Number'Value (Date_Field (Base + 9 .. Base + 10));
             Requested_Time : constant Time :=
-              Ada.Calendar.Formatting.Time_Of (Requested_Year, Requested_Month,
-                                               Requested_Day);
+              Ada.Calendar.Formatting.Time_Of
+                (Requested_Year, Requested_Month, Requested_Day, Boost_Hour,
+                 0, 0, 0.0, False, UTC_Time_Offset (Clock));
             Success : constant Boolean := Request_Boost (Requested_Time);
          begin
             if Success then
