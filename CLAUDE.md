@@ -65,15 +65,9 @@ logger or user-interface server — see the `20250507` note in
 ### Programs (each a `Main` in `build_all.gpr`, source in `src/`)
 
 - **hot_water_controller** — the actual controller: reads temperatures, drives the
-  pump relay, runs boost scheduling, logs data/events, serves UDP status to UI
-  clients, drives the LCD, feeds the hardware watchdog. Runs as a systemd service.
-- **pump_ui** — ANSI terminal UI client, talks to `hot_water_controller` over UDP.
-  Being deprecated in favour of `pump_web`.
-- **pump_web** — browser-based UI client over HTTP, functionally equivalent to
-  `pump_ui`, using the same UDP protocol underneath. Hand-rolled HTTP server on
-  `GNAT.Sockets` (not the AWS library, which is present as a sibling repo but
-  currently unused/unbuilt for this purpose). May eventually be folded directly
-  into `hot_water_controller`.
+  pump relay, runs boost scheduling, logs data/events, publishes status over MQTT,
+  serves a browser-based web UI directly (see below), drives the LCD, feeds the
+  hardware watchdog. Runs as a systemd service.
 - **configure_home_automation** — interactive tool that writes
   `Home_Automation.json`, including basic encryption of the MQTT password (see the
   `PASSWORD` byte array in the JSON — a one-time-pad-style cipher via
@@ -88,17 +82,19 @@ logger or user-interface server — see the `20250507` note in
 - **hw_cost** — offline calculator for electricity cost / solar savings from logged
   data, given a configurable cost/flow-rate and a command-line date range.
 
-### Shared UDP status/control protocol
+### Embedded web UI
 
-`shared_user_interface.ads` defines the wire protocol between `hot_water_controller`
-(server, `user_interface_server.ads`, port 50001) and UI clients (`pump_ui`,
-`pump_web`, via the generic `user_interface_client.ads` / `user_interface_web.ads`).
-`Request_Records`/`Status_Records` are variant records marshalled directly as
-`Stream_Element_Array`s sized off `'Size`. **`Interface_Version` in
-`shared_user_interface.ads` must be bumped whenever these record layouts change** —
-version mismatch is checked on every transaction and raises `Version_Mismatch`.
-`pump_ui` and `pump_web` are separate client instantiations of the same generic
-interface package sharing this protocol, not independent implementations.
+`user_interface_web.ads/.adb` implements the browser-based UI (status display,
+clear-fault-table and manual-boost forms) as a hand-rolled HTTP server on
+`GNAT.Sockets` (not the AWS library, which is present as a sibling repo but unused
+here), running as the `Web_UI` task started directly by `hot_water_controller`. There
+is no wire protocol or separate client process any more — `Web_UI` reads status via
+`User_Interface_Server.UI_Server.Get_Status` and issues commands straight to
+`Global_Data` (`Clear_Fault`, `Write_Next_Boost_Time`). `Web_UI` has a `Stop` entry
+(using an asynchronous `select ... then abort` to interrupt the blocking
+`Accept_Socket` call) so it terminates cleanly on shutdown; `hot_water_controller.adb`
+calls `Stop_Web_UI` with the same delay/abort fallback pattern used for the other
+subsystems.
 
 ### Core control packages (`src/`)
 

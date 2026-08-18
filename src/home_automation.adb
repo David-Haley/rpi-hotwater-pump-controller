@@ -4,13 +4,15 @@
 --  field name are all specified by a configuration file Home_Automation.json.
 --  The password is obfusscated
 
--- Author    : David Haley
--- Created   : 05/07/2026
--- Last Edit : 17/07/2026
+--  Author    : David Haley
+--  Created   : 05/07/2026
+--  Last_edit : 08/08/2026
+
+--  20260808 : Common_Configuration remamed to Common_Automation_Configuration.
 
 with Ada.Real_Time; use Ada.Real_Time;
 with GNATCOLL.JSON; use GNATCOLL.JSON;
-with Common_Configuration; use Common_Configuration;
+with Common_Automation_Configuration; use Common_Automation_Configuration;
 with DJH.JSON_Configuration;
 with MQTT_Client; use MQTT_Client;
 with DJH.Events_and_Errors; use DJH.Events_and_Errors;
@@ -41,8 +43,7 @@ package body Home_Automation is
       else
          Parsed := Read (Rx_String);
          if Parsed.Success then
-            return Get (Parsed.Value,
-                        Get_Value (Common_Configuration.Acknowledge_Field))
+            return Get (Parsed.Value, Get_Value (Acknowledge_Field))
               = Request;
          else
             return False;

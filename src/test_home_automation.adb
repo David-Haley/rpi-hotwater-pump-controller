@@ -3,7 +3,9 @@
 
 --  Author :    David Haley
 --  Created :   17/07/2026
---  Last Edit : 17/07/2026
+--  Last Edit : 08/08/2026
+
+--  20260808 : Common_Configuration remamed to Common_Automation_Configuration.
 
 with Ada.Text_IO; use Ada.Text_IO;
 with DJH.Events_and_Errors; use DJH.Events_and_Errors;
@@ -12,7 +14,7 @@ with Home_Automation; use Home_Automation;
 procedure Test_Home_Automation is
 
    Program_Name : constant String := "Test Home Automation";
-   Version : constant String := "20260717";
+   Version : constant String := "20260808";
    Command : Character := '?';
    
 begin --  Test_Home_Automation

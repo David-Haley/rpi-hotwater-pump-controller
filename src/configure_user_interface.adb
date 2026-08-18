@@ -1,18 +1,16 @@
---  Configuration tool for Home_Automation to access MQTT broker.
+--  Configuration tool for User_Interface_Server to access MQTT_Broker.
 
 --  Author    : Devid Haley
---  Created   : 05/07/2026
+--  Created   : 08/08/2026
 --  Last_edit : 08/08/2026
-
---  20260808 : Common_Configuration remamed to Common_Automation_Configuration.
 
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Text_IO.Unbounded_IO; use Ada.Text_IO.Unbounded_IO;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
-with Common_Automation_Configuration; use Common_Automation_Configuration;
+with Common_Status_Configuration; use Common_Status_Configuration;
 with DJH.JSON_Configuration;
 
-procedure Configure_Home_Automation is
+procedure Configure_User_Interface is
 
    package Configuration is new
       DJH.JSON_Configuration (Parameters, Configuration_File, Encrypted);
@@ -22,8 +20,8 @@ procedure Configure_Home_Automation is
    Response : Character := 'Y';
    Value : Unbounded_String;
    
-begin -- Configure_Home_Automation
-   Put_Line (" Configure_Home_Automation version 20260717");
+begin -- Configure_User_Interface
+   Put_Line (" Configure_User_Interface version 20260808");
    if Configuration_File_Exists then
       Put_Line ("Configuration file" & Configuration_File & " found");
       Put_Line ("For each prompt either enter a new value or enter only to");
@@ -54,4 +52,4 @@ begin -- Configure_Home_Automation
       end loop; -- P in Parameters
       Write_Configuration;
    end if; -- Response = 'y' or Response = 'Y'
-end Configure_Home_Automation;
+end Configure_User_Interface;

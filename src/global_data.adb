@@ -1,9 +1,14 @@
--- This package defined the global variables used within the Pump Controller
--- packages.
--- Author    : David Haley
--- Created   : 24/10/2017
--- Last Edit : 07/08/2026
+--  This package defined the global variables used within the Pump Controller
+--  packages.
+--  Author    : David Haley
+--  Created   : 24/10/2017
+--  Last Edit : 19/08/2026
 
+--  20260819 : Web server integrated into hot_water_controller. correction to
+--  Get_Status to return correct Controller_Up_Time and
+--  Accumulated_Pump_Run_Time.
+--  202260808 : Declaration of Status_Records moved here and Get_Status added.
+--  The intention is to minimise overhead of serving data to the user interface.
 --  20260807 : Configuration format changed from CSV to JSON and LCD
 --  information changed.
 --  20260717 : Boost element control now using Home Assistant via MQTT.
@@ -80,6 +85,8 @@
 -- 20171106 : Controller up time added
 -- 20171103 : Controller_States migrated here
 
+with Ada.Calendar.Time_Zones; use Ada.Calendar.Time_Zones;
+with Ada.Calendar.Formatting; use Ada.Calendar.Formatting;
 with RPi_GPIO; use RPi_GPIO;
 with Configuration; use Configuration;
 
@@ -90,10 +97,13 @@ package body Global_Data is
    type Difference_Buffers is array (Difference_indices) of
      Temperature_Differences;
 
+   File_Commit_Interval : constant Duration := 3600.0;
+   -- Commit logging files once per hour
+
    Pump_Relay : constant GPIO_Pins := Gen1;
    Fault_LED : constant GPIO_Pins := Gen2;
 
-   function Controller_Version return Version_String is ("20260807");
+   function Controller_Version return Version_String is ("20260819");
    
    -- Barriers have only been provided where a value could be undefined during
    -- startup. Barriers are not required where the variables are actually
@@ -108,6 +118,9 @@ package body Global_Data is
       function Pump_Run return Boolean;
 
       function Pump_Run_Time return Day_Seconds;
+
+      procedure Get_Previous_Run (Previous_Run_Duration : out Day_Seconds;
+                                  Previous_Run_Time : out Ada.Calendar.Time);
 
       entry Average_Difference (Result : out Temperature_Differences);
 
@@ -149,8 +162,9 @@ package body Global_Data is
       Last_Write : Difference_indices := Difference_indices'First;
       -- Recordes last element of Difference_Buffer which was updated
       Average_Difference_SV : Temperature_Differences := 0.0;
-      Pump_Run_SV : Boolean := False;
-      Pump_Run_Time_SV : Day_Seconds := 0;
+      Pump_Run_SV, Pump_Was_Running_SV : Boolean := False;
+      Previous_Run_Time_SV : Ada.Calendar.Time := Ada.Calendar.Clock;
+      Pump_Run_Time_SV, Previous_Run_Duration_SV : Day_Seconds := 0;
       Accumulated_Pump_Run_Time_SV : Accumulated_Times := 0;
       Up_Time_SV : Accumulated_Times := 0;
       Boost_Time_SV : Boost_Times;
@@ -180,6 +194,18 @@ package body Global_Data is
       function Pump_Run return Boolean is (Pump_Run_SV);
 
       function Pump_Run_Time return Day_Seconds is (Pump_Run_Time_SV);
+
+      procedure Get_Previous_Run (Previous_Run_Duration : out Day_Seconds;
+                                  Previous_Run_Time : out Ada.Calendar.Time) is
+
+         --  If the pump has not run since the controller was started then the
+         --  run duration will be 0 and the time will be the controller start
+         --  time.
+      
+      begin -- Get_Previous_Run
+         Previous_Run_Duration := Previous_Run_Duration_SV;
+         Previous_Run_Time := Previous_Run_Time_SV;
+      end Get_Previous_Run;
 
       entry Accumulated_Pump_Run_Time (result : out Accumulated_Times)
         when Defined_Accumulated_Time is
@@ -243,6 +269,7 @@ package body Global_Data is
       begin -- Pump_Start
          Pump_Run_SV := True;
          Write_Pin (Pin_High, Pump_Relay);
+         Pump_Was_Running_SV := True;
       end Pump_Start;
 
       procedure Pump_Stop is
@@ -250,6 +277,14 @@ package body Global_Data is
       begin -- Pump_Stop
          Pump_Run_SV := False;
          Write_Pin (Pin_Low, Pump_Relay);
+         --  There is an assumption here that the temperature and hence
+         --  Pump_Run_Time_SV is updated before decision call to Pump_Stop,
+         --  during notmsl execution.
+         if Pump_Was_Running_SV then
+            Previous_Run_Duration_SV := Pump_Run_Time_SV;
+            Previous_Run_Time_SV := Ada.Calendar.Clock;
+            Pump_Was_Running_SV := False;
+         end if; -- Pump_Was_Running_SV
       end Pump_Stop;
 
       procedure Write_Accumulated_Time (Run_Time : in Accumulated_Times) is
@@ -300,6 +335,59 @@ package body Global_Data is
       end Clear_Fault;
 
    end Controller_State;
+
+   function On_The_Hour (T : in Time) return Time is
+      
+      -- Effectively rounds T down such that minutes and seconds are zero
+
+      Year : Year_Number;
+      Month : Month_Number;
+      Day : Day_Number;
+      This_Hour : Hour_Number;
+      Minute : Minute_Number;
+      Second : Second_Number;
+      Sub_Second : Second_Duration;
+      Leap_Second : Boolean;
+
+   begin -- On_The_Hour
+      Split (T, Year, Month, Day,
+             This_Hour, Minute, Second, Sub_Second,
+             Leap_Second, UTC_Time_Offset (T));
+      return Time_Of (Year, Month, Day,
+                      This_Hour, 0, 0, 0.0,
+                      Leap_Second, UTC_Time_Offset (T));
+   end On_The_Hour;
+
+   protected File_Commit_Time is
+
+      procedure Set_Next_File_Commit_Time;
+      -- Sets time for next file commit
+
+      function Get_Next_File_Commit_Time return Time;
+      -- Gets time of next file commit
+
+   private
+
+      Commit_Time : Time := On_The_Hour (Clock) + File_Commit_Interval;
+      -- Once per hour on the hour, first commit could be less than one hour
+      -- after start.
+
+   end File_Commit_Time;
+
+   protected body File_Commit_Time is
+
+      procedure Set_Next_File_Commit_Time is
+         -- Sets time for next file commit
+
+      begin -- Set_Next_File_Commit_Time
+         Commit_Time := @ + File_Commit_Interval;
+      end Set_Next_File_Commit_Time;
+
+      function Get_Next_File_Commit_Time return Time is
+         (Commit_Time);
+         -- Gets time of next file commit
+
+   end File_Commit_Time;
    
    -- Externally visible subprograms related to Controller state are below.
 
@@ -360,6 +448,34 @@ package body Global_Data is
    function Read_Fault_Table return Fault_Tables is
      (Controller_State.Read_Fault_Table);
 
+   function Get_Status return Status_Records is
+
+      Result : Status_Records;
+
+   begin -- Get_Status
+      Result.Controller_Version := Controller_Version;
+      Result.Controller_Time := Clock;
+      Result.Controller_Up_Time := Controller_State.Up_Time;
+      Controller_State.Panel_Temperature (Result.Panel_Temperature);
+      Controller_State.Tank_Temperature (Result.Tank_Temperature);
+      Controller_State.Average_Difference (Result.Average_Difference);
+      Result.Is_Comfortable := Controller_State.Is_Comfortable;
+      Result.Pump_Run := Controller_State.Pump_Run;
+      Result.Pump_Run_Time := Controller_State.Pump_Run_Time;
+      Controller_State.Accumulated_Pump_Run_Time
+        (Result.Accumulated_Pump_Run_Time);
+      Controller_State.Get_Previous_Run (Result.Previous_Run_Duration,
+                                         Result.Previous_Run_Time);
+      Result.Next_File_Commit_Time :=
+        File_Commit_Time.Get_Next_File_Commit_Time;
+      Controller_State.Next_Boost (Result.Next_Boost_Time);
+      Result.Fault_Table := Controller_State.Read_Fault_Table;
+      return Result;
+   end Get_Status;
+
+   function Get_Next_File_Commit_Time return Time is
+      (File_Commit_Time.Get_Next_File_Commit_Time);
+
    procedure Write_Temperature (Tank : in Temperatures;
                                 Panel : in Temperatures) is
                                 
@@ -414,6 +530,12 @@ package body Global_Data is
    begin -- Clear_Fault
       Controller_State.Clear_Fault (Fault_Type);
    end Clear_Fault;
+
+   procedure Set_Next_File_Commit_Time is
+
+   begin -- Set_Next_File_Commit_Time
+      File_Commit_Time.Set_Next_File_Commit_Time;
+   end Set_Next_File_Commit_Time;
 
 begin -- Global_Data
    Bind_Pin (Pump_Relay, Out_Pin);

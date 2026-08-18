@@ -1,33 +1,45 @@
--- This package provides web based client component for a distributed user
--- interface. It relays status and command requests to the controller using
--- exactly the same UDP protocol as User_Interface_Client, but renders the
--- result as HTML served over HTTP instead of drawing an ANSI terminal
--- screen. The equivalent of the terminal commands are provided as follows:
--- 'r' (Refresh_Screen) is implicit in every page load / auto refresh;
+-- This package provides the web based user interface. It renders the same
+-- information and commands that pump_ui / pump_web used to provide over a
+-- separate UDP protocol, but as HTML served over HTTP, reading and writing
+-- Global_Data directly since it now runs in the same process as the
+-- controller. The equivalent of the old terminal commands are provided as
+-- follows: status is refreshed on every page load / auto refresh;
 -- 'c' (Clear_Fault_Table) and 'm' (Manual_Boost) are provided as web forms;
 -- 'e' (Exit_User_Interface) has no web equivalent, the server simply runs
--- until the process is stopped (matching how the controller itself is now
--- stopped via systemd rather than an in-band request).
+-- until the controller is stopped via systemd/ctrl c.
 -- Author    : David Haley
 -- Created   : 06/08/2026
+-- Last Edit : 19/08/2026
 
-with Ada.Text_IO; use Ada.Text_IO;
+-- 20260819 : Corrections to command button operations.
+-- 20260816 : De-genericised and integrated directly into
+-- hot_water_controller. Status is read via
+-- User_Interface_Server.UI_Server.Get_Status and commands are issued
+-- directly to Global_Data instead of round tripping over UDP. Manual_Boost
+-- now clamps the requested time between Clock and the existing
+-- Mandatory_Boost_Time instead of overwriting Mandatory_Boost_Time. Web_UI
+-- gained a Stop entry (using an asynchronous select to interrupt the
+-- blocking Accept_Socket call) so the controller can shut down cleanly.
+
 with Ada.Strings; use Ada.Strings;
 with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with Ada.Characters.Handling; use Ada.Characters.Handling;
-with Ada.Streams; use Ada.Streams;
 with Ada.Calendar; use Ada.Calendar;
 with Ada.Calendar.Formatting; use Ada.Calendar.Formatting;
 with Ada.Calendar.Time_Zones; use Ada.Calendar.Time_Zones;
-with Ada.Exceptions; use Ada.Exceptions;
 with GNAT.Sockets; use GNAT.Sockets;
+with Machine_Properties;
 with Pump_Controller_Types; use Pump_Controller_Types;
-with Shared_User_Interface; use Shared_User_Interface;
+with Configuration; use Configuration;
+with Global_Data; use Global_Data;
+with User_Interface_Server; use User_Interface_Server;
 with DJH.Date_and_Time_Strings; use DJH.Date_and_Time_Strings;
+with DJH.Events_and_Errors; use DJH.Events_and_Errors;
 
 package body User_Interface_Web is
 
+   HTTP_Port : constant Port_Type := 8080;
    Queue_Capacity : constant := 8;
    Worker_Count : constant := 4;
    Status_Refresh_Seconds : constant := 2;
@@ -58,127 +70,53 @@ package body User_Interface_Web is
      ".error{color:#ff9492}.ok{color:#7ee787}";
 
    -------------------------------------------------------------------------
-   -- Controller_Link relays requests to the controller over UDP, using the
-   -- same wire protocol as User_Interface_Client. A single task serialises
-   -- access to the socket so any number of HTTP worker tasks can safely
-   -- call it concurrently.
+   -- Direct calls into Global_Data / User_Interface_Server, replacing the
+   -- old UDP round trip.
    -------------------------------------------------------------------------
 
-   task Controller_Link is
-      entry Fetch_Status (Status : out Status_Records;
-                          Previous_Run : out Day_Seconds; Success : out Boolean);
-      entry Clear_Faults (Success : out Boolean);
-      entry Request_Boost (Requested_Time : in Time; Success : out Boolean);
-   end Controller_Link;
+   function Fetch_Status (Status : out Status_Records) return Boolean is
 
-   task body Controller_Link is
-
-      Client_Socket : Socket_Type;
-
-      Controller_Address : constant Sock_Addr_Type :=
-        (Family => Family_Inet,
-         Addr => Addresses (Get_Host_By_Name (Controller_Name), 1),
-         Port => Server_Port);
-
-      Client_Address : constant Sock_Addr_Type :=
-        (Family => Family_Inet, Addr => Any_Inet_Addr, Port => Any_Port);
-
-      Version_Mismatch : exception;
-
-      function Round_Trip (Request_Record : in Request_Records)
-                           return Status_Records is
-
-         TX_Buffer : Request_Buffers;
-         for TX_Buffer'Address use Request_Record'Address;
-         pragma Import (Ada, TX_Buffer);
-         TX_Last : Stream_Element_Offset;
-         Status : Status_Records;
-         RX_Buffer : Response_Buffers;
-         for RX_Buffer'Address use Status'Address;
-         pragma Import (Ada, RX_Buffer);
-         RX_Last : Stream_Element_Offset;
-
-      begin -- Round_Trip
-         Send_Socket (Client_Socket, TX_Buffer, TX_Last, Controller_Address);
-         Receive_Socket (Client_Socket, RX_Buffer, RX_Last);
-         if Status.User_Interface_Version /= Interface_Version then
-            raise Version_Mismatch with "Controller UI version " &
-              Status.User_Interface_Version & " does not match " &
-              Interface_Version;
-         end if; -- Status.User_Interface_Version /= Interface_Version
-         return Status;
-      end Round_Trip;
-
-      Last_Pump_Run_Time, Previous_Pump_Run_Time : Day_Seconds := 0;
-
-   begin -- Controller_Link
-      Create_Socket (Client_Socket, Family_Inet, Socket_Datagram);
-      Set_Socket_Option (Client_Socket, Socket_Level, (Receive_Timeout, 5.0));
-      Bind_Socket (Client_Socket, Client_Address);
-      loop
-         select
-            accept Fetch_Status (Status : out Status_Records;
-                                 Previous_Run : out Day_Seconds;
-                                 Success : out Boolean) do
-               declare
-                  Request_Record : constant Request_Records :=
-                    (Request => Get_Status,
-                     User_Interface_Version => Interface_Version);
-               begin
-                  Status := Round_Trip (Request_Record);
-                  if Status.Pump_Run_Time = 0 and Last_Pump_Run_Time > 0 then
-                     Previous_Pump_Run_Time := Last_Pump_Run_Time;
-                  end if; -- Status.Pump_Run_Time = 0 and Last_Pump_Run_Time > 0
-                  Last_Pump_Run_Time := Status.Pump_Run_Time;
-                  Success := True;
-               exception
-                  when others =>
-                     Success := False;
-               end;
-               Previous_Run := Previous_Pump_Run_Time;
-            end Fetch_Status;
-         or
-            accept Clear_Faults (Success : out Boolean) do
-               declare
-                  Request_Record : constant Request_Records :=
-                    (Request => Clear_Fault_Table,
-                     User_Interface_Version => Interface_Version);
-                  Status : Status_Records;
-                  pragma Unreferenced (Status);
-               begin
-                  Status := Round_Trip (Request_Record);
-                  Success := True;
-               exception
-                  when others =>
-                     Success := False;
-               end;
-            end Clear_Faults;
-         or
-            accept Request_Boost (Requested_Time : in Time;
-                                  Success : out Boolean) do
-               declare
-                  Request_Record : constant Request_Records :=
-                    (Request => Manual_Boost,
-                     User_Interface_Version => Interface_Version,
-                     User_Input => True,
-                     Next_Boost_Time => (Next_Boost_Time => Requested_Time,
-                                         Mandatory_Boost_Time => Requested_Time));
-                  Status : Status_Records;
-                  pragma Unreferenced (Status);
-               begin
-                  Status := Round_Trip (Request_Record);
-                  Success := True;
-               exception
-                  when others =>
-                     Success := False;
-               end;
-            end Request_Boost;
-         end select;
-      end loop; -- forever
+   begin -- Fetch_Status
+      UI_Server.Get_Status (Status);
+      return True;
    exception
-      when E : others =>
-         Put_Line ("Controller_Link - " & Exception_Message (E));
-   end Controller_Link;
+      when others =>
+         -- Most likely UI_Server has already terminated during shutdown.
+         return False;
+   end Fetch_Status;
+
+   function Clear_Faults return Boolean is
+
+   begin -- Clear_Faults
+      for F in Fault_Types loop
+         Global_Data.Clear_Fault (F);
+      end loop; -- F in Fault_Types
+      Put_Event ("Fault table cleared");
+      return True;
+   exception
+      when others =>
+         return False;
+   end Clear_Faults;
+
+   function Request_Boost (Requested_Time : in Time) return Boolean is
+
+      Current : constant Boost_Times := Global_Data.Next_Boost;
+      Clamped_Time : Time := Requested_Time;
+
+   begin -- Request_Boost
+      if Clamped_Time < Clock then
+         Clamped_Time := Clock;
+      elsif Clamped_Time > Current.Mandatory_Boost_Time then
+         Clamped_Time := Current.Mandatory_Boost_Time;
+      end if; -- Clamped_Time < Clock
+      Global_Data.Write_Next_Boost_Time
+        ((Next_Boost_Time => Clamped_Time,
+          Mandatory_Boost_Time => Current.Mandatory_Boost_Time));
+      return True;
+   exception
+      when others =>
+         return False;
+   end Request_Boost;
 
    -------------------------------------------------------------------------
    -- HTML rendering
@@ -225,10 +163,23 @@ package body User_Interface_Web is
    function Page_Header (Title : in String; Refresh_Seconds : in Natural := 0)
                          return String is
 
+      -- A meta refresh runs on the browser's navigation timer, independent
+      -- of JavaScript, so it fires even while a blocking confirm() dialog
+      -- (e.g. Clear Fault Table) is open, dismissing the dialog before the
+      -- user can answer it. A setTimeout-driven reload queues behind the
+      -- same JS event loop that confirm() blocks, so it waits until the
+      -- dialog is answered. If the delay elapsed while the dialog was open,
+      -- the reload becomes due the instant the user answers it, and can
+      -- then race the browser's own navigation to the form's POST target,
+      -- aborting the submission; Auto_Refresh_Suspended, set by the form's
+      -- onsubmit handler once the user confirms, guards against that.
       Refresh_Tag : constant String :=
         (if Refresh_Seconds > 0 then
-           "<meta http-equiv=""refresh"" content=""" &
-             Trim (Refresh_Seconds'Image, Left) & """>"
+           "<script>var Auto_Refresh_Suspended=false;" &
+             "setTimeout(function(){if(!Auto_Refresh_Suspended)" &
+             "location.reload();}," &
+             Trim (Natural'Image (Refresh_Seconds * 1000), Left) &
+             ");</script>"
          else "");
 
    begin -- Page_Header
@@ -252,25 +203,23 @@ package body User_Interface_Web is
    function Render_Status_Page return Unbounded_String is
 
       Status : Status_Records;
-      Previous_Run : Day_Seconds;
-      Success : Boolean;
+      Success : constant Boolean := Fetch_Status (Status);
       Result : Unbounded_String;
 
    begin -- Render_Status_Page
-      Controller_Link.Fetch_Status (Status, Previous_Run, Success);
       Result := To_Unbounded_String
         (Page_Header ("Hot Water Pump Controller", Status_Refresh_Seconds));
       if not Success then
-         Append (Result, "<p class=""error"">No response from controller """
-                   & Controller_Name & """, retrying automatically.</p>");
+         Append (Result, "<p class=""error"">Controller status temporarily " &
+                   "unavailable, retrying automatically.</p>");
       else
          declare
             Diff : constant Temperature_Differences :=
               Status.Panel_Temperature - Status.Tank_Temperature;
          begin
-            Append (Result, "<p class=""meta"">Controller " & Controller_Name
-                      & " &mdash; version " & Status.Controller_Version &
-                      " &mdash; controller time " &
+            Append (Result, "<p class=""meta"">Controller " &
+                      Machine_Properties.Machine_Name & " &mdash; version " &
+                      Status.Controller_Version & " &mdash; controller time " &
                       Time_String (Status.Controller_Time) & "</p>");
             Append (Result, "<div class=""grid"">");
             Append (Result, Card ("Panel Temperature",
@@ -294,8 +243,10 @@ package body User_Interface_Web is
                      else "<span class=""badge bad"">Cold</span>")));
             Append (Result, Card ("Pump Run Time",
                     Elapsed_Seconds (Status.Pump_Run_Time, Exclude_Days)));
-            Append (Result, Card ("Previous Run Time",
-                    Elapsed_Seconds (Previous_Run, Exclude_Days)));
+            Append (Result, Card ("Previous Run",
+                    Elapsed_Seconds (Status.Previous_Run_Duration,
+                                     Exclude_Days) & " at " &
+                      Time_String (Status.Previous_Run_Time)));
             Append (Result, Card ("Total Pump Run Time",
                     Elapsed_Seconds (Status.Accumulated_Pump_Run_Time,
                                      Hours_More_Than_24)));
@@ -329,8 +280,9 @@ package body User_Interface_Web is
       end if; -- not Success
       Append (Result, "<h2>Commands</h2><div class=""commands"">");
       Append (Result, "<form method=""post"" action=""/clear_fault_table""" &
-                " onsubmit=""return confirm('Clear fault table?');"">" &
-                "<button type=""submit"">Clear Fault Table</button></form>");
+                " onsubmit=""if(confirm('Clear fault table?'))" &
+                "{Auto_Refresh_Suspended=true;return true;}return false;""" &
+                "><button type=""submit"">Clear Fault Table</button></form>");
       Append (Result, "<a class=""button"" href=""/manual_boost"">" &
                 "Manual Boost</a>");
       Append (Result, "</div>");
@@ -472,17 +424,19 @@ package body User_Interface_Web is
             Requested_Day : constant Day_Number :=
               Day_Number'Value (Date_Field (Base + 9 .. Base + 10));
             Requested_Time : constant Time :=
-              Ada.Calendar.Formatting.Time_Of (Requested_Year, Requested_Month,
-                                               Requested_Day);
-            Success : Boolean;
+              Ada.Calendar.Formatting.Time_Of
+                (Requested_Year, Requested_Month, Requested_Day, Boost_Hour,
+                 0, 0, 0.0, False, UTC_Time_Offset (Clock));
+            Success : constant Boolean := Request_Boost (Requested_Time);
          begin
-            Controller_Link.Request_Boost (Requested_Time, Success);
             if Success then
-               Append (Result, "<p class=""ok"">Boost date updated to " &
-                         Date_Field & ".</p>");
+               Append (Result, "<p class=""ok"">Boost date updated, " &
+                         "requested " & Date_Field &
+                         "; the actual time is kept between now and the " &
+                         "mandatory boost time.</p>");
             else
-               Append (Result, "<p class=""error"">No response from " &
-                         "controller, boost date not confirmed.</p>");
+               Append (Result, "<p class=""error"">Boost date not " &
+                         "updated.</p>");
             end if; -- Success
          exception
             when others =>
@@ -499,17 +453,15 @@ package body User_Interface_Web is
 
    function Render_Clear_Result return Unbounded_String is
 
-      Success : Boolean;
+      Success : constant Boolean := Clear_Faults;
       Result : Unbounded_String := To_Unbounded_String (Page_Header
         ("Clear Fault Table"));
 
    begin -- Render_Clear_Result
-      Controller_Link.Clear_Faults (Success);
       if Success then
          Append (Result, "<p class=""ok"">Fault table cleared.</p>");
       else
-         Append (Result, "<p class=""error"">No response from " &
-                   "controller.</p>");
+         Append (Result, "<p class=""error"">Fault table not cleared.</p>");
       end if; -- Success
       Append (Result, "<p><a href=""/"">Back to status</a></p>");
       Append (Result, Page_Footer);
@@ -649,30 +601,68 @@ package body User_Interface_Web is
    end Worker;
 
    Pool : array (1 .. Worker_Count) of Worker;
-   pragma Unreferenced (Pool);
 
    -------------------------------------------------------------------------
-   -- Run_UI
+   -- Web_UI
    -------------------------------------------------------------------------
 
-   procedure Run_UI (HTTP_Port : in GNAT.Sockets.Port_Type := 8080) is
+   task body Web_UI is
 
       Server_Socket, Client_Socket : Socket_Type;
       Server_Address : constant Sock_Addr_Type :=
         (Family => Family_Inet, Addr => Any_Inet_Addr, Port => HTTP_Port);
       Client_Address : Sock_Addr_Type;
+      Run_Web_UI : Boolean := True;
+      Accept_Selector : Selector_Type;
+      Read_Set, Write_Set : Socket_Set_Type;
+      Selector_State : Selector_Status;
+      Poll_Interval : constant Selector_Duration := 0.5;
+      -- Accept_Socket blocks indefinitely and cannot be used directly as a
+      -- select alternative, so readiness is polled via Check_Selector with a
+      -- bounded timeout, interleaved with a non-blocking check of Stop. This
+      -- gives Stop a worst case latency of Poll_Interval, and avoids relying
+      -- on closing Server_Socket out from under a blocked Accept_Socket call
+      -- in another task, which is not reliably safe.
 
-   begin -- Run_UI
+   begin -- Web_UI
       Create_Socket (Server_Socket, Family_Inet, Socket_Stream);
       Set_Socket_Option (Server_Socket, Socket_Level, (Reuse_Address, True));
       Bind_Socket (Server_Socket, Server_Address);
       Listen_Socket (Server_Socket);
-      Put_Line ("Pump_Web listening on port " & Trim (HTTP_Port'Image, Left) &
-                  ", relaying to controller """ & Controller_Name & """");
-      loop
-         Accept_Socket (Server_Socket, Client_Socket, Client_Address);
-         Connection_Queue.Put (Client_Socket);
-      end loop; -- forever
-   end Run_UI;
+      Create_Selector (Accept_Selector);
+      Put_Event ("Web_UI listening on port" & HTTP_Port'Img);
+      while Run_Web_UI loop
+         select
+            accept Stop do
+               Run_Web_UI := False;
+            end Stop;
+         else
+            null;
+         end select;
+         if Run_Web_UI then
+            Empty (Read_Set);
+            Set (Read_Set, Server_Socket);
+            Empty (Write_Set);
+            Check_Selector (Accept_Selector, Read_Set, Write_Set,
+                            Selector_State, Poll_Interval);
+            if Selector_State = Completed then
+               Accept_Socket (Server_Socket, Client_Socket, Client_Address);
+               Connection_Queue.Put (Client_Socket);
+            end if; -- Selector_State = Completed
+         end if; -- Run_Web_UI
+      end loop; -- Run_Web_UI
+      Close_Selector (Accept_Selector);
+      -- Worker tasks hold no external resources while idle on
+      -- Connection_Queue, or mid a stateless HTTP request, so aborting them
+      -- outright is safe and needs no timeout, unlike Boost_Task/Logger.
+      for W in Pool'Range loop
+         abort Pool (W);
+      end loop; -- W in Pool'Range
+      Close_Socket (Server_Socket);
+      Put_Event ("Web_UI Stopped");
+   exception
+      when Event : others =>
+         Put_Error ("Web_UI", Event);
+   end Web_UI;
 
 end User_Interface_Web;

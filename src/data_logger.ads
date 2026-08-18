@@ -1,8 +1,9 @@
 -- This package provides data logging for the Pump controller
 -- Author    : David Haley
 -- Created   : 21/10/2017
--- Last Edit : 19/06/2025
+-- Last Edit : 08/08/2026
 
+--  20260808 : File commit timing logic moved to Global_Data
 --  20260619 : Compilerwarnings removed.
 -- 20250506 : Start_Logger removed, to avoid startup deadlock.
 -- 20220715 : Indirect calls to Logger.Start and Stop_Loggerconverted to renames
@@ -13,8 +14,6 @@
 -- and standard output managed here.
 -- 20190216 : Read_File_Commit_Time added.
 
-with Ada.Calendar; use Ada.Calendar;
-
 package Data_Logger is
 
    task Logger is
@@ -24,11 +23,5 @@ package Data_Logger is
 
    procedure Stop_Logger renames Logger.Stop;
    -- Stops data logging
-
-   function Read_File_Commit_Time return Time;
-   -- Returns time of next file commit, that is, Flush (xx)
-
-   function On_The_Hour (T : in Time) return Time;
-   -- Effectively rounds T down such that minutes and seconds are zero
 
 end Data_Logger;
