@@ -4,8 +4,11 @@
 -- System control is provided by a model 3B Raspberry Pi.
 -- Author    : David Haley
 -- Created   : 02/11/2017
--- Last Edit : 16/08/2026
+-- Last Edit : 18/08/2026
 
+--  20260818 : Web UI moved to AWS; Web_UI is no longer a task (AWS owns its
+--  own tasking), so Initialise now calls Start_Web_UI explicitly, and
+--  Exception_Stop's abort fallback for Web_UI was removed.
 --  20260816 : Web UI integrated directly into the controller; shutdown now
 --  also stops Web_UI, with the same delay/abort fallback used for the other
 --  subsystems.
@@ -102,6 +105,7 @@ procedure Hot_Water_Controller is
       Put_Event ("Watchdog enabled");
       Enable_Watchdog;
       Start_Boost;
+      Start_Web_UI;
       -- Last task to start delayed return to allow home automation to start.
    end Initialise;
 
@@ -171,12 +175,7 @@ procedure Hot_Water_Controller is
                   delay 3.3;
                   abort UI_Server;
                end select;
-               select
-                  Stop_Web_UI;
-               or
-                  delay 3.3;
-                  abort Web_UI;
-               end select;
+               Stop_Web_UI;
                Disable_Watchdog;
                select
                   Stop_Sampling_Temperature;

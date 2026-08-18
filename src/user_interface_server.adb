@@ -1,8 +1,9 @@
 --  This package provides server component for the user interface.
 --  Author    : David Haley
 --  Created   : 29/10/2017
---  Last Edit : 16/08/2026
+--  Last Edit : 18/08/2026
 
+--  20260818 : Spelling correction to "Running" and "Stopped" in Status.JSON.
 --  20260816 : Termination issue fixed (assisted by Claude) missing "or"
 --  between accept blocks in UI_Server.
 --  20260809 : MQTT Publisher and integrated web server.
@@ -94,9 +95,9 @@ package body User_Interface_Server is
             Set_Field (Status_JSON, "Is_Comfortable", "Cold");
          end if; -- Status_Record.Is_Comfortable
          if Status_Record.Pump_Run then
-            Set_Field (Status_JSON,"Pump_Run", "Runing");
+            Set_Field (Status_JSON,"Pump_Run", "Running");
          else
-            Set_Field (Status_JSON,"Pump_Run", "Stoped");
+            Set_Field (Status_JSON,"Pump_Run", "Stopped");
          end if; -- Status_Record.Pump_Run
          Set_Field (Status_JSON,"Pump_Run_Time",
                     Elapsed_Seconds (Status_Record.Pump_Run_Time,
