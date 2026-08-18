@@ -9,26 +9,31 @@
 -- until the controller is stopped via systemd/ctrl c.
 -- Author    : David Haley
 -- Created   : 06/08/2026
--- Last Edit : 19/08/2026
+-- Last Edit : 18/08/2026
 
+-- 20260818 : HTTP serving moved to AWS (Ada Web Server), replacing the
+-- hand-rolled GNAT.Sockets accept loop, connection queue and worker pool
+-- with a single Dispatch callback; AWS owns request parsing, connection
+-- pooling and shutdown, so Web_UI is no longer a task.
 -- 20260819 : Corrections to command button operations.
 -- 20260816 : De-genericised and integrated directly into
 -- hot_water_controller. Status is read via
 -- User_Interface_Server.UI_Server.Get_Status and commands are issued
 -- directly to Global_Data instead of round tripping over UDP. Manual_Boost
 -- now clamps the requested time between Clock and the existing
--- Mandatory_Boost_Time instead of overwriting Mandatory_Boost_Time. Web_UI
--- gained a Stop entry (using an asynchronous select to interrupt the
--- blocking Accept_Socket call) so the controller can shut down cleanly.
+-- Mandatory_Boost_Time instead of overwriting Mandatory_Boost_Time.
 
 with Ada.Strings; use Ada.Strings;
 with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
-with Ada.Characters.Handling; use Ada.Characters.Handling;
 with Ada.Calendar; use Ada.Calendar;
 with Ada.Calendar.Formatting; use Ada.Calendar.Formatting;
 with Ada.Calendar.Time_Zones; use Ada.Calendar.Time_Zones;
-with GNAT.Sockets; use GNAT.Sockets;
+with AWS.Server;
+with AWS.Status; use AWS.Status;
+with AWS.Response;
+with AWS.Parameters;
+with AWS.Messages;
 with Machine_Properties;
 with Pump_Controller_Types; use Pump_Controller_Types;
 with Configuration; use Configuration;
@@ -39,9 +44,8 @@ with DJH.Events_and_Errors; use DJH.Events_and_Errors;
 
 package body User_Interface_Web is
 
-   HTTP_Port : constant Port_Type := 8080;
-   Queue_Capacity : constant := 8;
-   Worker_Count : constant := 4;
+   HTTP_Port : constant := 8080;
+   Max_Connection : constant := 4;
    Status_Refresh_Seconds : constant := 2;
 
    CSS : constant String :=
@@ -307,108 +311,11 @@ package body User_Interface_Web is
       return Result;
    end Render_Boost_Form;
 
-   function Render_Boost_Result (Form_Body : in String) return Unbounded_String;
-   function Render_Clear_Result return Unbounded_String;
+   function Render_Boost_Result (Request : in AWS.Status.Data)
+                                 return Unbounded_String is
 
-   -------------------------------------------------------------------------
-   -- HTTP protocol helpers
-   -------------------------------------------------------------------------
-
-   function Read_Line (Stream : not null Stream_Access) return String is
-
-      Buffer : Unbounded_String;
-      Ch : Character;
-
-   begin -- Read_Line
-      loop
-         Character'Read (Stream, Ch);
-         exit when Ch = ASCII.LF;
-         if Ch /= ASCII.CR then
-            Append (Buffer, Ch);
-         end if; -- Ch /= ASCII.CR
-      end loop;
-      return To_String (Buffer);
-   exception
-      when others =>
-         return To_String (Buffer);
-   end Read_Line;
-
-   function Read_Body (Stream : not null Stream_Access; Length : in Natural)
-                       return String is
-
-      Buffer : Unbounded_String;
-      Ch : Character;
-
-   begin -- Read_Body
-      for I in 1 .. Length loop
-         Character'Read (Stream, Ch);
-         Append (Buffer, Ch);
-      end loop; -- I in 1 .. Length
-      return To_String (Buffer);
-   exception
-      when others =>
-         return To_String (Buffer);
-   end Read_Body;
-
-   function URL_Decode (Encoded : in String) return String is
-
-      Result : Unbounded_String;
-      I : Positive := Encoded'First;
-
-   begin -- URL_Decode
-      while I <= Encoded'Last loop
-         case Encoded (I) is
-            when '+' =>
-               Append (Result, ' ');
-               I := I + 1;
-            when '%' =>
-               if I + 2 <= Encoded'Last then
-                  Append (Result, Character'Val (Integer'Value
-                          ("16#" & Encoded (I + 1 .. I + 2) & "#")));
-                  I := I + 3;
-               else
-                  I := I + 1;
-               end if; -- I + 2 <= Encoded'Last
-            when others =>
-               Append (Result, Encoded (I));
-               I := I + 1;
-         end case; -- Encoded (I)
-      end loop; -- I <= Encoded'Last
-      return To_String (Result);
-   exception
-      when others =>
-         return Encoded;
-   end URL_Decode;
-
-   function Get_Form_Value (Form_Body : in String; Key : in String)
-                            return String is
-
-      Search_Key : constant String := Key & "=";
-      Start : Natural := 0;
-      Stop : Natural;
-
-   begin -- Get_Form_Value
-      if Form_Body'Length >= Search_Key'Length then
-         for I in Form_Body'First .. Form_Body'Last - Search_Key'Length + 1 loop
-            if Form_Body (I .. I + Search_Key'Length - 1) = Search_Key then
-               Start := I + Search_Key'Length;
-               exit;
-            end if; -- Form_Body (I .. I + Search_Key'Length - 1) = Search_Key
-         end loop; -- I in Form_Body'First .. Form_Body'Last - Search_Key'Length + 1
-      end if; -- Form_Body'Length >= Search_Key'Length
-      if Start = 0 then
-         return "";
-      end if; -- Start = 0
-      Stop := Start;
-      while Stop <= Form_Body'Last and then Form_Body (Stop) /= '&' loop
-         Stop := Stop + 1;
-      end loop; -- Stop <= Form_Body'Last and then Form_Body (Stop) /= '&'
-      return URL_Decode (Form_Body (Start .. Stop - 1));
-   end Get_Form_Value;
-
-   function Render_Boost_Result (Form_Body : in String) return Unbounded_String is
-
-      Date_Field : constant String := Get_Form_Value (Form_Body, "date");
+      Date_Field : constant String :=
+        AWS.Parameters.Get (AWS.Status.Parameters (Request), "date");
       Result : Unbounded_String := To_Unbounded_String (Page_Header
         ("Manual Boost"));
 
@@ -468,201 +375,63 @@ package body User_Interface_Web is
       return Result;
    end Render_Clear_Result;
 
-   procedure Send_Response (Stream : not null Stream_Access;
-                            Status_Line : in String; Body_Text : in String;
-                            Content_Type : in String :=
-                              "text/html; charset=utf-8") is
-
-      Header : constant String :=
-        Status_Line & ASCII.CR & ASCII.LF &
-        "Content-Type: " & Content_Type & ASCII.CR & ASCII.LF &
-        "Content-Length: " & Trim (Body_Text'Length'Image, Left) & ASCII.CR &
-        ASCII.LF & "Connection: close" & ASCII.CR & ASCII.LF &
-        "Cache-Control: no-store" & ASCII.CR & ASCII.LF & ASCII.CR & ASCII.LF;
-
-   begin -- Send_Response
-      String'Write (Stream, Header & Body_Text);
-   end Send_Response;
-
    -------------------------------------------------------------------------
-   -- Connection queue and worker pool
+   -- HTTP dispatch and server lifecycle (AWS owns request parsing,
+   -- connection pooling and the accept loop).
    -------------------------------------------------------------------------
 
-   type Socket_Array is array (1 .. Queue_Capacity) of Socket_Type;
+   function Dispatch (Request : in AWS.Status.Data) return AWS.Response.Data
+   is
 
-   protected Connection_Queue is
-      entry Put (Socket : in Socket_Type);
-      entry Get (Socket : out Socket_Type);
-   private
-      Sockets : Socket_Array;
-      Head, Tail, Count : Natural := 0;
-   end Connection_Queue;
+      Method : constant AWS.Status.Request_Method := AWS.Status.Method
+        (Request);
+      URI : constant String := AWS.Status.URI (Request);
 
-   protected body Connection_Queue is
+   begin -- Dispatch
+      if Method = AWS.Status.GET and then URI = "/" then
+         return AWS.Response.Build
+           ("text/html; charset=utf-8", Render_Status_Page,
+            Cache_Control => AWS.Messages.Prevent_Cache);
+      elsif Method = AWS.Status.GET and then URI = "/manual_boost" then
+         return AWS.Response.Build
+           ("text/html; charset=utf-8", Render_Boost_Form,
+            Cache_Control => AWS.Messages.Prevent_Cache);
+      elsif Method = AWS.Status.POST and then URI = "/manual_boost" then
+         return AWS.Response.Build
+           ("text/html; charset=utf-8", Render_Boost_Result (Request),
+            Cache_Control => AWS.Messages.Prevent_Cache);
+      elsif Method = AWS.Status.POST and then URI = "/clear_fault_table" then
+         return AWS.Response.Build
+           ("text/html; charset=utf-8", Render_Clear_Result,
+            Cache_Control => AWS.Messages.Prevent_Cache);
+      else
+         return AWS.Response.Build
+           ("text/html", "<h1>Not Found</h1>", Status_Code => AWS.Messages.S404);
+      end if; -- Method = AWS.Status.GET and then URI = "/"
+   end Dispatch;
 
-      entry Put (Socket : in Socket_Type) when Count < Queue_Capacity is
-      begin -- Put
-         Tail := Tail mod Queue_Capacity + 1;
-         Sockets (Tail) := Socket;
-         Count := Count + 1;
-      end Put;
+   WS : AWS.Server.HTTP;
 
-      entry Get (Socket : out Socket_Type) when Count > 0 is
-      begin -- Get
-         Head := Head mod Queue_Capacity + 1;
-         Socket := Sockets (Head);
-         Count := Count - 1;
-      end Get;
+   procedure Start_Web_UI is
 
-   end Connection_Queue;
-
-   procedure Handle_Connection (Socket : in Socket_Type) is
-
-      Stream : constant Stream_Access := GNAT.Sockets.Stream (Socket);
-      Request_Line : constant String := Read_Line (Stream);
-      Space_1, Space_2 : Natural;
-
-   begin -- Handle_Connection
-      Space_1 := Index (Request_Line, " ");
-      if Space_1 = 0 then
-         Close_Socket (Socket);
-         return;
-      end if; -- Space_1 = 0
-      Space_2 := Index (Request_Line (Space_1 + 1 .. Request_Line'Last), " ");
-      if Space_2 = 0 then
-         Close_Socket (Socket);
-         return;
-      end if; -- Space_2 = 0
-      declare
-         Method : constant String := Request_Line (Request_Line'First ..
-                                                    Space_1 - 1);
-         Path : constant String := Request_Line (Space_1 + 1 .. Space_2 - 1);
-         Content_Length : Natural := 0;
-      begin
-         loop -- consume headers
-            declare
-               Header_Line : constant String := Read_Line (Stream);
-            begin
-               exit when Header_Line'Length = 0;
-               if Header_Line'Length > 15 and then To_Upper
-                 (Header_Line (Header_Line'First .. Header_Line'First + 14))
-                 = "CONTENT-LENGTH:" then
-                  Content_Length := Natural'Value (Trim
-                    (Header_Line (Header_Line'First + 15 ..
-                                  Header_Line'Last), Both));
-               end if; -- Header_Line'Length > 15 and then ...
-            end;
-         end loop; -- consume headers
-         declare
-            Form_Body : constant String :=
-              (if Content_Length > 0 then Read_Body (Stream, Content_Length)
-               else "");
-         begin
-            if Method = "GET" and then Path = "/" then
-               Send_Response (Stream, "HTTP/1.1 200 OK",
-                              To_String (Render_Status_Page));
-            elsif Method = "GET" and then Path = "/manual_boost" then
-               Send_Response (Stream, "HTTP/1.1 200 OK",
-                              To_String (Render_Boost_Form));
-            elsif Method = "POST" and then Path = "/manual_boost" then
-               Send_Response (Stream, "HTTP/1.1 200 OK",
-                              To_String (Render_Boost_Result (Form_Body)));
-            elsif Method = "POST" and then Path = "/clear_fault_table" then
-               Send_Response (Stream, "HTTP/1.1 200 OK",
-                              To_String (Render_Clear_Result));
-            else
-               Send_Response (Stream, "HTTP/1.1 404 Not Found",
-                              "<h1>Not Found</h1>");
-            end if; -- Method = "GET" and then Path = "/"
-         end;
-      end;
-      Close_Socket (Socket);
+   begin -- Start_Web_UI
+      AWS.Server.Start
+        (WS, "Hot Water Pump Controller", Callback => Dispatch'Access,
+         Port => HTTP_Port, Max_Connection => Max_Connection);
+      Put_Event ("Web_UI listening on port" & Natural'Image (HTTP_Port));
    exception
-      when others =>
-         begin
-            Close_Socket (Socket);
-         exception
-            when others =>
-               null;
-         end;
-   end Handle_Connection;
+      when Event : others =>
+         Put_Error ("Web_UI", Event);
+   end Start_Web_UI;
 
-   task type Worker;
+   procedure Stop_Web_UI is
 
-   task body Worker is
-
-      Socket : Socket_Type;
-
-   begin -- Worker
-      loop
-         Connection_Queue.Get (Socket);
-         Handle_Connection (Socket);
-      end loop; -- forever
-   end Worker;
-
-   Pool : array (1 .. Worker_Count) of Worker;
-
-   -------------------------------------------------------------------------
-   -- Web_UI
-   -------------------------------------------------------------------------
-
-   task body Web_UI is
-
-      Server_Socket, Client_Socket : Socket_Type;
-      Server_Address : constant Sock_Addr_Type :=
-        (Family => Family_Inet, Addr => Any_Inet_Addr, Port => HTTP_Port);
-      Client_Address : Sock_Addr_Type;
-      Run_Web_UI : Boolean := True;
-      Accept_Selector : Selector_Type;
-      Read_Set, Write_Set : Socket_Set_Type;
-      Selector_State : Selector_Status;
-      Poll_Interval : constant Selector_Duration := 0.5;
-      -- Accept_Socket blocks indefinitely and cannot be used directly as a
-      -- select alternative, so readiness is polled via Check_Selector with a
-      -- bounded timeout, interleaved with a non-blocking check of Stop. This
-      -- gives Stop a worst case latency of Poll_Interval, and avoids relying
-      -- on closing Server_Socket out from under a blocked Accept_Socket call
-      -- in another task, which is not reliably safe.
-
-   begin -- Web_UI
-      Create_Socket (Server_Socket, Family_Inet, Socket_Stream);
-      Set_Socket_Option (Server_Socket, Socket_Level, (Reuse_Address, True));
-      Bind_Socket (Server_Socket, Server_Address);
-      Listen_Socket (Server_Socket);
-      Create_Selector (Accept_Selector);
-      Put_Event ("Web_UI listening on port" & HTTP_Port'Img);
-      while Run_Web_UI loop
-         select
-            accept Stop do
-               Run_Web_UI := False;
-            end Stop;
-         else
-            null;
-         end select;
-         if Run_Web_UI then
-            Empty (Read_Set);
-            Set (Read_Set, Server_Socket);
-            Empty (Write_Set);
-            Check_Selector (Accept_Selector, Read_Set, Write_Set,
-                            Selector_State, Poll_Interval);
-            if Selector_State = Completed then
-               Accept_Socket (Server_Socket, Client_Socket, Client_Address);
-               Connection_Queue.Put (Client_Socket);
-            end if; -- Selector_State = Completed
-         end if; -- Run_Web_UI
-      end loop; -- Run_Web_UI
-      Close_Selector (Accept_Selector);
-      -- Worker tasks hold no external resources while idle on
-      -- Connection_Queue, or mid a stateless HTTP request, so aborting them
-      -- outright is safe and needs no timeout, unlike Boost_Task/Logger.
-      for W in Pool'Range loop
-         abort Pool (W);
-      end loop; -- W in Pool'Range
-      Close_Socket (Server_Socket);
+   begin -- Stop_Web_UI
+      AWS.Server.Shutdown (WS);
       Put_Event ("Web_UI Stopped");
    exception
       when Event : others =>
          Put_Error ("Web_UI", Event);
-   end Web_UI;
+   end Stop_Web_UI;
 
 end User_Interface_Web;

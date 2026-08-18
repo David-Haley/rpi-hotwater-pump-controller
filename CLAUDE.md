@@ -37,6 +37,16 @@ build directly on the target Raspberry Pi if needed.
 - `libmosquitto` (MQTT)
 - `libgpiod` (GPIO)
 - `GNATCOLL.JSON` (JSON config read/write)
+- AWS (Ada Web Server), `gprinstall`-registered system-wide at
+  `/usr/share/gpr/aws.gpr`; `build_all.gpr` pulls it in via a plain `with
+  "aws";` (no build step needed). AWS transitively brings in `gnatcoll_core`
+  (superset of what Pi_Common's own `lib_gnatcoll.gpr`/`lib_gnatcoll_minimal.gpr`
+  provide, so `build_all.gpr` does not `with` those directly — doing so
+  alongside AWS causes a "unit cannot belong to several projects" conflict,
+  since both would claim the same GNATCOLL unit names from different source
+  trees), `xmlada`, and links `libssl`/`libcrypto` (statically links AWS/
+  GNATCOLL/XML-Ada; only OpenSSL ends up as a new runtime shared-library
+  dependency).
 - I2C enabled (LCD) and SPI enabled (ADC) on the Pi
 
 ## Running / testing
@@ -85,16 +95,17 @@ logger or user-interface server — see the `20250507` note in
 ### Embedded web UI
 
 `user_interface_web.ads/.adb` implements the browser-based UI (status display,
-clear-fault-table and manual-boost forms) as a hand-rolled HTTP server on
-`GNAT.Sockets` (not the AWS library, which is present as a sibling repo but unused
-here), running as the `Web_UI` task started directly by `hot_water_controller`. There
-is no wire protocol or separate client process any more — `Web_UI` reads status via
-`User_Interface_Server.UI_Server.Get_Status` and issues commands straight to
-`Global_Data` (`Clear_Fault`, `Write_Next_Boost_Time`). `Web_UI` has a `Stop` entry
-(using an asynchronous `select ... then abort` to interrupt the blocking
-`Accept_Socket` call) so it terminates cleanly on shutdown; `hot_water_controller.adb`
-calls `Stop_Web_UI` with the same delay/abort fallback pattern used for the other
-subsystems.
+clear-fault-table and manual-boost forms) as an `AWS.Server.HTTP` instance — a
+single `Dispatch` callback routes `AWS.Status.Data` requests by method/URI and
+returns `AWS.Response.Data`; AWS itself owns the accept loop, connection
+pooling and request parsing. There is no wire protocol or separate client
+process — `Dispatch` reads status via `User_Interface_Server.UI_Server.Get_Status`
+and issues commands straight to `Global_Data` (`Clear_Fault`,
+`Write_Next_Boost_Time`). Because AWS's `HTTP` server object manages its own
+tasking, `User_Interface_Web` no longer has a `Web_UI` task: `Start_Web_UI`
+and `Stop_Web_UI` are plain procedures wrapping `AWS.Server.Start`/`Shutdown`,
+called explicitly from `hot_water_controller.adb`'s `Initialise`/shutdown
+paths.
 
 ### Core control packages (`src/`)
 

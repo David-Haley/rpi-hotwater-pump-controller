@@ -2,9 +2,11 @@
 --  packages.
 --  Author    : David Haley
 --  Created   : 24/10/2017
---  Last Edit : 19/08/2026
+--  Last Edit : 18/08/2026
 
---  20260819 : Web server integrated into hot_water_controller. correction to
+--  20260818 : Web server revised to use Ada Web Server. Incorrect build
+--  20260819 retained.
+--  20260817 : Web server integrated into hot_water_controller. correction to
 --  Get_Status to return correct Controller_Up_Time and
 --  Accumulated_Pump_Run_Time.
 --  202260808 : Declaration of Status_Records moved here and Get_Status added.
