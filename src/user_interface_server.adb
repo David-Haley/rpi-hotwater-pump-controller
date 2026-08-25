@@ -1,8 +1,10 @@
 --  This package provides server component for the user interface.
 --  Author    : David Haley
 --  Created   : 29/10/2017
---  Last Edit : 18/08/2026
+--  Last Edit : 23/08/2026
 
+--  20250823 : Duplication of the field Tank_Temperature corected by adding
+--  "_Status" to all the fault annunciators.
 --  20260818 : Spelling correction to "Running" and "Stopped" in Status.JSON.
 --  20260816 : Termination issue fixed (assisted by Claude) missing "or"
 --  between accept blocks in UI_Server.
@@ -116,24 +118,24 @@ package body User_Interface_Server is
                     Image (Status_Record.Next_Boost_Time.Next_Boost_Time, False,
                     UTC_Time_Offset));
          if Status_Record.Fault_Table (Accumulated_Time_File) then
-            Set_Field (Status_JSON,"Pump_Log", Bad);
+            Set_Field (Status_JSON,"Pump_Log_Status", Bad);
          else
-            Set_Field (Status_JSON,"Pump_Log", Good);
+            Set_Field (Status_JSON,"Pump_Log_Status", Good);
          end if; -- Status_Record.Fault_Table (Accumulated_Time_File)
          if Status_Record.Fault_Table (Log_File) then
-            Set_Field (Status_JSON,"Data_Log", Bad);
+            Set_Field (Status_JSON,"Data_Log_Status", Bad);
          else
-            Set_Field (Status_JSON,"Data_Log", Good);
+            Set_Field (Status_JSON,"Data_Log_Status", Good);
          end if; -- Status_Record.Fault_Table (Log_File)
          if Status_Record.Fault_Table (Tank_Temperature) then
-            Set_Field (Status_JSON,"Tank_Temperature", Bad);
+            Set_Field (Status_JSON,"Tank_Temperature_Status", Bad);
          else
-            Set_Field (Status_JSON,"Tank_Temperature", Good);
+            Set_Field (Status_JSON,"Tank_Temperature_Status", Good);
          end if; -- Status_Record.Fault_Table (Tank_Temperature)
          if Status_Record.Fault_Table (Boost_Failure) then
-            Set_Field (Status_JSON,"Auto_Boost", Bad);
+            Set_Field (Status_JSON,"Auto_Boost_Status", Bad);
          else
-            Set_Field (Status_JSON,"Auto_Boost", Good);
+            Set_Field (Status_JSON,"Auto_Boost_Status", Good);
          end if; -- Status_Record.Fault_Table (Boost_Failure)
          Send (Publish_Handle, Write (Status_JSON));
       end Publish;

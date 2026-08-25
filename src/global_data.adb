@@ -4,6 +4,8 @@
 --  Created   : 24/10/2017
 --  Last Edit : 18/08/2026
 
+--  20260823 : In User_Interface_Server, duplication of the field
+--  Tank_Temperature corected by adding "_Status" to all the fault annunciators.
 --  20260818 : Web server revised to use Ada Web Server. Incorrect build
 --  20260819 retained.
 --  20260817 : Web server integrated into hot_water_controller. correction to
@@ -105,7 +107,7 @@ package body Global_Data is
    Pump_Relay : constant GPIO_Pins := Gen1;
    Fault_LED : constant GPIO_Pins := Gen2;
 
-   function Controller_Version return Version_String is ("20260819");
+   function Controller_Version return Version_String is ("20260823");
    
    -- Barriers have only been provided where a value could be undefined during
    -- startup. Barriers are not required where the variables are actually
