@@ -6,8 +6,9 @@
 
 --  Author    : David Haley
 --  Created   : 05/07/2026
---  Last_edit : 08/08/2026
+--  Last_edit : 15/10/2026
 
+--  20261015 : MQTT keep alive reduced to 60 s.
 --  20260808 : Common_Configuration remamed to Common_Automation_Configuration.
 
 with Ada.Real_Time; use Ada.Real_Time;
@@ -99,14 +100,14 @@ begin -- Home_Automation
                   Get_Value (Request_Topic),
                   Request_Handle,
                   2,
-                  Keep_Alive_Times'Last);
+                  60);
       Connect_Rx (Get_Value (Broker),
                   Get_Value (User),
                   Get_Value (Password),
                   Get_Value (Acknowledge_Topic),
                   Acknowledge_Handle,
                   2,
-                  Keep_Alive_Times'Last);
+                  60);
    else
       raise JSON_Configuration_Error with Configuration_File & " missing";
    end if; -- Valid_Configuration
