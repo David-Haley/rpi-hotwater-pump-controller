@@ -2,8 +2,10 @@
 --  packages.
 --  Author    : David Haley
 --  Created   : 24/10/2017
---  Last Edit : 18/08/2026
+--  Last Edit : 15/10/2026
 
+--  20261015 : MQTT keep alive times set to 60s, rebuilt with revised low level
+--  gpio, I2C and SPI drivers.
 --  20260823 : In User_Interface_Server, duplication of the field
 --  Tank_Temperature corected by adding "_Status" to all the fault annunciators.
 --  20260818 : Web server revised to use Ada Web Server. Incorrect build
@@ -107,7 +109,7 @@ package body Global_Data is
    Pump_Relay : constant GPIO_Pins := Gen1;
    Fault_LED : constant GPIO_Pins := Gen2;
 
-   function Controller_Version return Version_String is ("20260823");
+   function Controller_Version return Version_String is ("20261015");
    
    -- Barriers have only been provided where a value could be undefined during
    -- startup. Barriers are not required where the variables are actually
